@@ -14,7 +14,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 export default function Analysis() {
   const { uploadId } = useParams<{ uploadId: string }>();
-  const { user, isAuthenticated } = useAuth();
+  // Auth removed - public access
+  const user = null;
+  const isAuthenticated = true; // Always treat as authenticated for public access
   
   const [parameters, setParameters] = useState({
     includeScope3: false,
@@ -116,17 +118,7 @@ export default function Analysis() {
   }
   const finalChartData = Array.from(dateMap.values());
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <p className="text-center text-slate-600 mb-4">Please sign in to view analysis</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Public access - no auth check
 
   if (loadingStatus) {
     return (

@@ -6,7 +6,7 @@ import { BarChart3, TrendingUp, Globe, Building2 } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
+  // Auth removed - public access
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
@@ -18,18 +18,9 @@ export default function Home() {
             <h1 className="text-xl font-bold text-slate-900">Climate Scenario Analyzer</h1>
           </div>
           <div className="flex items-center gap-4">
-            {isAuthenticated ? (
-              <>
-                <span className="text-sm text-slate-600">Welcome, {user?.name}</span>
-                <Link href="/dashboard">
-                  <Button>Go to Dashboard</Button>
-                </Link>
-              </>
-            ) : (
-              <a href={getLoginUrl()}>
-                <Button>Sign In</Button>
-              </a>
-            )}
+            <Link href="/dashboard">
+              <Button>Go to Dashboard</Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -45,19 +36,11 @@ export default function Home() {
               Analyze equity market valuations to infer implied decarbonization rates across three climate investment strategies: low carbon intensity, decarbonizing companies, and climate solutions providers.
             </p>
             <div className="flex gap-4 justify-center pt-4">
-              {isAuthenticated ? (
-                <Link href="/upload">
-                  <Button size="lg" className="text-lg px-8">
-                    Upload Data
-                  </Button>
-                </Link>
-              ) : (
-                <a href={getLoginUrl()}>
-                  <Button size="lg" className="text-lg px-8">
-                    Get Started
-                  </Button>
-                </a>
-              )}
+              <Link href="/upload">
+                <Button size="lg" className="text-lg px-8">
+                  Upload Data
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
@@ -148,19 +131,11 @@ export default function Home() {
             <p className="text-lg mb-8 text-blue-100">
               Start reverse engineering climate transition pathways from market valuations today
             </p>
-            {isAuthenticated ? (
-              <Link href="/upload">
-                <Button size="lg" variant="secondary" className="text-lg px-8">
-                  Upload Your Data
-                </Button>
-              </Link>
-            ) : (
-              <a href={getLoginUrl()}>
-                <Button size="lg" variant="secondary" className="text-lg px-8">
-                  Sign In to Get Started
-                </Button>
-              </a>
-            )}
+            <Link href="/upload">
+              <Button size="lg" variant="secondary" className="text-lg px-8">
+                Upload Your Data
+              </Button>
+            </Link>
           </div>
         </section>
       </main>

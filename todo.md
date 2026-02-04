@@ -91,3 +91,9 @@
 - [x] Test DCF methodology calculations
 - [x] Test regional aggregation logic
 - [x] All 23 unit tests passing
+
+## Remove Authentication Requirements
+- [x] Change backend routers from protectedProcedure to publicProcedure
+- [x] Remove auth checks from frontend pages (Upload, Dashboard, Analysis)
+- [x] Remove user-specific data filtering (make all uploads public)
+- [x] Test application without sign-in

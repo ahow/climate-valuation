@@ -8,7 +8,8 @@ import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 
 export default function Upload() {
-  const { user, isAuthenticated } = useAuth();
+  // Auth removed - public access
+  const user = null;
   const [, setLocation] = useLocation();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -64,23 +65,7 @@ export default function Upload() {
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Authentication Required</CardTitle>
-            <CardDescription>Please sign in to upload data</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/">
-              <Button className="w-full">Go to Home</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Public access - no auth check
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -94,7 +79,7 @@ export default function Upload() {
             <Link href="/dashboard">
               <Button variant="ghost">Dashboard</Button>
             </Link>
-            <span className="text-sm text-slate-600">{user?.name}</span>
+            {/* Public access - no user display */}
           </div>
         </div>
       </header>

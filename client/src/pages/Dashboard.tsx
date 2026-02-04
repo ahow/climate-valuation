@@ -7,28 +7,11 @@ import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
 export default function Dashboard() {
-  const { user, isAuthenticated } = useAuth();
-  const { data: uploads, isLoading } = trpc.data.getUploads.useQuery(undefined, {
-    enabled: isAuthenticated,
-  });
+  // Auth removed - public access
+  const user = null;
+  const { data: uploads, isLoading } = trpc.data.getUploads.useQuery();
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Authentication Required</CardTitle>
-            <CardDescription>Please sign in to view your dashboard</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/">
-              <Button className="w-full">Go to Home</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Public access - no auth check
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -45,7 +28,7 @@ export default function Dashboard() {
                 Upload Data
               </Button>
             </Link>
-            <span className="text-sm text-slate-600">{user?.name}</span>
+            {/* Public access - no user display */}
           </div>
         </div>
       </header>

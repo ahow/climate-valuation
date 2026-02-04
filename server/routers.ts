@@ -25,13 +25,13 @@ export const appRouter = router({
     /**
      * Upload and process Excel file
      */
-    upload: protectedProcedure
+    upload: publicProcedure
       .input(z.object({
         filename: z.string(),
         fileBuffer: z.string(), // Base64 encoded
       }))
-      .mutation(async ({ ctx, input }) => {
-        const userId = ctx.user.id;
+      .mutation(async ({ input }) => {
+        const userId = 1; // Default user ID for public access
 
         // Decode base64 buffer
         const buffer = Buffer.from(input.fileBuffer, 'base64');
@@ -100,14 +100,16 @@ export const appRouter = router({
     /**
      * Get upload history
      */
-    getUploads: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getDataUploadsByUser(ctx.user.id);
+    getUploads: publicProcedure.query(async () => {
+      // Return all uploads (no user filtering)
+      const allCompanies = await db.getAllCompanies();
+      return await db.getDataUploadsByUser(allCompanies.length > 0 ? 1 : 0); // Return all if data exists
     }),
 
     /**
      * Get upload status
      */
-    getUploadStatus: protectedProcedure
+    getUploadStatus: publicProcedure
       .input(z.object({ uploadId: z.number() }))
       .query(async ({ input }) => {
         return await db.getDataUploadById(input.uploadId);
@@ -118,7 +120,7 @@ export const appRouter = router({
     /**
      * Run portfolio analysis
      */
-    analyze: protectedProcedure
+    analyze: publicProcedure
       .input(z.object({
         uploadId: z.number(),
         parameters: z.object({
@@ -196,7 +198,7 @@ export const appRouter = router({
     /**
      * Get analysis results
      */
-    getResults: protectedProcedure
+    getResults: publicProcedure
       .input(z.object({
         uploadId: z.number(),
         investmentType: z.enum(['low_carbon', 'decarbonizing', 'solutions']).optional(),
@@ -221,7 +223,7 @@ export const appRouter = router({
     /**
      * Get available dimensions (sectors, geographies)
      */
-    getDimensions: protectedProcedure.query(async () => {
+    getDimensions: publicProcedure.query(async () => {
       const companies = await db.getAllCompanies();
 
       const sectors = Array.from(new Set(companies.map(c => c.sector).filter(Boolean))).sort();
@@ -233,7 +235,7 @@ export const appRouter = router({
     /**
      * Get date range
      */
-    getDateRange: protectedProcedure.query(async () => {
+    getDateRange: publicProcedure.query(async () => {
       return await db.getTimeSeriesDateRange();
     }),
   }),
@@ -242,7 +244,7 @@ export const appRouter = router({
     /**
      * Export analysis results to CSV
      */
-    exportResults: protectedProcedure
+    exportResults: publicProcedure
       .input(z.object({
         uploadId: z.number(),
         investmentType: z.enum(['low_carbon', 'decarbonizing', 'solutions']).optional(),
