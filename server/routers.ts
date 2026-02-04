@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { parseExcelFile, processClimateData } from "./dataProcessor";
-import { runFullAnalysis, type ClassificationThresholds, type CompanyWithTimeSeries } from "./portfolioAnalyzer";
+import { runFullAnalysis, type AnalysisParameters, type CompanyWithTimeSeries, mapGeographyToRegion } from "./portfolioAnalyzerV2";
 import { storagePut } from "./storage";
 
 export const appRouter = router({
@@ -121,16 +121,19 @@ export const appRouter = router({
     analyze: protectedProcedure
       .input(z.object({
         uploadId: z.number(),
-        thresholds: z.object({
-          lowCarbonPercentile: z.number().default(25),
-          decarbonizingTarget: z.number().default(-0.5),
-          solutionsScore: z.number().default(2.0),
+        parameters: z.object({
+          includeScope3: z.boolean().default(false),
+          methodology: z.enum(['relative', 'dcf']).default('relative'),
+          sectorGranularity: z.enum(['sector', 'industry']).default('sector'),
+          thresholds: z.object({
+            tertileApproach: z.boolean().default(true),
+          }),
         }),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const { uploadId, thresholds, startDate, endDate } = input;
+        const { uploadId, parameters, startDate, endDate } = input;
 
         // Get all companies and their time series
         const companies = await db.getAllCompanies();
@@ -153,15 +156,17 @@ export const appRouter = router({
         }
         const dates = Array.from(dateSet).map(t => new Date(t)).sort((a, b) => a.getTime() - b.getTime());
 
-        // Get unique sectors and geographies
-        const sectors = Array.from(new Set(companies.map(c => c.sector).filter(Boolean))) as string[];
-        const geographies = Array.from(new Set(companies.map(c => c.geography).filter(Boolean))) as string[];
+        // Get unique sectors/industries and map geographies to regions
+        const sectorField = parameters.sectorGranularity === 'industry' ? 'industry' : 'sector';
+        const sectors = Array.from(new Set(companies.map(c => c[sectorField]).filter(Boolean))) as string[];
+        const rawGeographies = Array.from(new Set(companies.map(c => c.geography).filter(Boolean))) as string[];
+        const geographies = Array.from(new Set(rawGeographies.map(g => mapGeographyToRegion(g))));
 
         // Run analysis
         const results = runFullAnalysis(
           companiesWithData,
           dates,
-          thresholds as ClassificationThresholds,
+          parameters as AnalysisParameters,
           { sectors, geographies }
         );
 
@@ -178,7 +183,7 @@ export const appRouter = router({
             sector: result.sector ?? null,
             avgCarbonIntensity: result.avgCarbonIntensity,
             avgPeRatio: result.avgPeRatio,
-            valuationPremium: result.valuationPremium,
+            valuationPremium: result.carbonRiskDiscount,
             impliedCarbonPrice: result.impliedCarbonPrice,
             impliedDecarbRate: result.impliedDecarbRate,
             portfolioSize: result.portfolioSize,

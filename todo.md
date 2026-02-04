@@ -55,3 +55,39 @@
 - [x] Document methodology and assumptions
 - [ ] Add tooltips explaining metrics
 - [x] Create README with deployment instructions
+
+## Enhancement Phase - User Feedback Integration
+
+### Methodology Enhancements
+- [x] Implement DCF-based valuation approach alongside relative valuation
+- [x] Invert valuation logic: carbon risk = lower valuations for high intensity companies
+- [ ] Add methodology selector in UI (DCF vs Relative Valuation)
+
+### Portfolio Classification Refinements
+- [x] Refactor to sector-relative tertile approach (bottom third vs top third within sector)
+- [x] Apply tertile logic to all three investment types
+- [x] Update classification to use inverted carbon risk discount logic
+
+### Parameter Controls
+- [x] Add scope selector toggle (Scope 1+2 vs Scope 1+2+3)
+- [x] Add sector granularity selector (allow choosing classification level from Descriptive sheet)
+- [ ] Persist user parameter selections across sessions
+
+### Regional Aggregation
+- [x] Map geography field countries to common regions (North America, Europe, Asia-Pacific, etc.)
+- [x] Add region aggregation logic to analysis engine
+- [x] Update dashboard filters to use aggregated regions
+
+### Dashboard Enhancements
+- [x] Add methodology toggle control
+- [x] Add scope selection radio buttons
+- [x] Add sector granularity dropdown
+- [x] Update visualizations to reflect new logic
+- [x] Add explanatory tooltips for new parameters
+
+### Testing
+- [x] Write unit tests for enhanced calculation functions
+- [x] Test sector-relative tertile classification
+- [x] Test DCF methodology calculations
+- [x] Test regional aggregation logic
+- [x] All 23 unit tests passing

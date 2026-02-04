@@ -2,13 +2,13 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Download, TrendingUp, BarChart3 } from "lucide-react";
+import { Loader2, Download, TrendingUp, BarChart3, ArrowLeft } from "lucide-react";
 import { Link, useParams } from "wouter";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -16,10 +16,13 @@ export default function Analysis() {
   const { uploadId } = useParams<{ uploadId: string }>();
   const { user, isAuthenticated } = useAuth();
   
-  const [thresholds, setThresholds] = useState({
-    lowCarbonPercentile: 25,
-    decarbonizingTarget: -0.5,
-    solutionsScore: 2.0,
+  const [parameters, setParameters] = useState({
+    includeScope3: false,
+    methodology: 'relative' as 'relative' | 'dcf',
+    sectorGranularity: 'sector' as 'sector' | 'industry',
+    thresholds: {
+      tertileApproach: true,
+    },
   });
   
   const [filters, setFilters] = useState({
@@ -70,7 +73,7 @@ export default function Analysis() {
   const handleRunAnalysis = () => {
     analyzeMutation.mutate({
       uploadId: uploadIdNum,
-      thresholds,
+      parameters,
     });
   };
 
@@ -95,37 +98,30 @@ export default function Analysis() {
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .map(r => ({
           date: new Date(r.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
-          'Low Carbon': r.investmentType === 'low_carbon' ? (r.impliedDecarbRate || 0) * 100 : null,
-          'Decarbonizing': r.investmentType === 'decarbonizing' ? (r.impliedDecarbRate || 0) * 100 : null,
-          'Solutions': r.investmentType === 'solutions' ? (r.impliedDecarbRate || 0) * 100 : null,
+          investmentType: r.investmentType,
+          impliedDecarbRate: (r.impliedDecarbRate || 0) * 100,
         }))
     : [];
 
-  // Merge data by date
-  const mergedChartData: Record<string, any> = {};
-  chartData.forEach(d => {
-    if (!mergedChartData[d.date]) {
-      mergedChartData[d.date] = { date: d.date };
+  // Pivot data for multi-line chart
+  const dateMap = new Map<string, any>();
+  for (const item of chartData) {
+    if (!dateMap.has(item.date)) {
+      dateMap.set(item.date, { date: item.date });
     }
-    if (d['Low Carbon'] !== null) mergedChartData[d.date]['Low Carbon'] = d['Low Carbon'];
-    if (d['Decarbonizing'] !== null) mergedChartData[d.date]['Decarbonizing'] = d['Decarbonizing'];
-    if (d['Solutions'] !== null) mergedChartData[d.date]['Solutions'] = d['Solutions'];
-  });
-
-  const finalChartData = Object.values(mergedChartData);
+    const entry = dateMap.get(item.date)!;
+    if (item.investmentType === 'low_carbon') entry['Low Carbon'] = item.impliedDecarbRate;
+    if (item.investmentType === 'decarbonizing') entry['Decarbonizing'] = item.impliedDecarbRate;
+    if (item.investmentType === 'solutions') entry['Solutions'] = item.impliedDecarbRate;
+  }
+  const finalChartData = Array.from(dateMap.values());
 
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Authentication Required</CardTitle>
-            <CardDescription>Please sign in to view analysis</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/">
-              <Button className="w-full">Go to Home</Button>
-            </Link>
+          <CardContent className="pt-6">
+            <p className="text-center text-slate-600 mb-4">Please sign in to view analysis</p>
           </CardContent>
         </Card>
       </div>
@@ -140,62 +136,52 @@ export default function Analysis() {
     );
   }
 
-  if (!uploadStatus || uploadStatus.status !== 'completed') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Data Not Ready</CardTitle>
-            <CardDescription>
-              {uploadStatus?.status === 'processing' 
-                ? 'Your data is still being processed. Please check back in a few moments.'
-                : 'This dataset is not available or failed to process.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/dashboard">
-              <Button className="w-full">Back to Dashboard</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="border-b bg-white">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/">
-            <h1 className="text-xl font-bold text-slate-900">Climate Scenario Analyzer</h1>
-          </Link>
+      <header className="bg-white border-b border-slate-200">
+        <div className="container mx-auto py-4 px-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost">Dashboard</Button>
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
             </Link>
-            <span className="text-sm text-slate-600">{user?.name}</span>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Climate Scenario Analysis</h1>
+              <p className="text-sm text-slate-600">
+                {uploadStatus?.filename || 'Loading...'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleExport} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
+      <main className="container mx-auto py-8 px-4">
+        <div className="space-y-6">
+          {uploadStatus?.status !== 'completed' && (
+            <Card className="border-amber-200 bg-amber-50">
+              <CardContent className="py-4">
+                <p className="text-amber-800">
+                  Data processing status: <strong>{uploadStatus?.status}</strong>
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-3xl font-bold text-slate-900">{uploadStatus.filename}</h2>
-              <p className="text-slate-600 mt-1">
-                {uploadStatus.companiesCount} companies · {uploadStatus.timePeriodsCount} time periods
-              </p>
+              <h2 className="text-xl font-semibold text-slate-900">Analysis Configuration</h2>
+              <p className="text-sm text-slate-600">Configure parameters and run analysis</p>
             </div>
-            <div className="flex gap-3">
-              <Button onClick={handleExport} variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export Results
-              </Button>
-              <Button onClick={handleRunAnalysis} disabled={analyzeMutation.isPending}>
+            <div>
+              <Button onClick={handleRunAnalysis} disabled={analyzeMutation.isPending || uploadStatus?.status !== 'completed'}>
                 {analyzeMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -214,45 +200,98 @@ export default function Analysis() {
           {/* Configuration Panel */}
           <Card>
             <CardHeader>
-              <CardTitle>Analysis Configuration</CardTitle>
-              <CardDescription>Adjust thresholds for portfolio classification</CardDescription>
+              <CardTitle>Methodology & Parameters</CardTitle>
+              <CardDescription>Configure analysis approach and classification parameters</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <Label>Low Carbon Percentile: {thresholds.lowCarbonPercentile}%</Label>
-                  <Slider
-                    value={[thresholds.lowCarbonPercentile]}
-                    onValueChange={([value]) => setThresholds(prev => ({ ...prev, lowCarbonPercentile: value }))}
-                    min={10}
-                    max={50}
-                    step={5}
-                  />
-                  <p className="text-xs text-slate-600">Bottom percentile for carbon intensity</p>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Valuation Methodology */}
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Valuation Methodology</Label>
+                  <RadioGroup 
+                    value={parameters.methodology} 
+                    onValueChange={(value: 'relative' | 'dcf') => setParameters(prev => ({ ...prev, methodology: value }))}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="relative" id="relative" />
+                      <Label htmlFor="relative" className="font-normal cursor-pointer">
+                        Relative Valuation (P/E comparison)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="dcf" id="dcf" />
+                      <Label htmlFor="dcf" className="font-normal cursor-pointer">
+                        DCF-based (Discounted cash flow)
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  <p className="text-xs text-slate-600">
+                    {parameters.methodology === 'relative' 
+                      ? 'Compares P/E ratios between climate and baseline portfolios' 
+                      : 'Uses discounted cash flow to model carbon cost impact on valuations'}
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Decarbonizing Target: {(thresholds.decarbonizingTarget * 100).toFixed(0)}%</Label>
-                  <Slider
-                    value={[Math.abs(thresholds.decarbonizingTarget) * 100]}
-                    onValueChange={([value]) => setThresholds(prev => ({ ...prev, decarbonizingTarget: -value / 100 }))}
-                    min={30}
-                    max={100}
-                    step={10}
-                  />
-                  <p className="text-xs text-slate-600">Minimum emission reduction by 2050</p>
+                {/* Emissions Scope */}
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Emissions Scope</Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="scope3"
+                      checked={parameters.includeScope3}
+                      onCheckedChange={(checked) => setParameters(prev => ({ ...prev, includeScope3: checked }))}
+                    />
+                    <Label htmlFor="scope3" className="font-normal cursor-pointer">
+                      Include Scope 3 emissions
+                    </Label>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    {parameters.includeScope3 
+                      ? 'Using Scope 1 + 2 + 3 (full value chain emissions)' 
+                      : 'Using Scope 1 + 2 only (direct and energy emissions)'}
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Solutions Score: {thresholds.solutionsScore.toFixed(1)}</Label>
-                  <Slider
-                    value={[thresholds.solutionsScore]}
-                    onValueChange={([value]) => setThresholds(prev => ({ ...prev, solutionsScore: value }))}
-                    min={0}
-                    max={7}
-                    step={0.5}
-                  />
-                  <p className="text-xs text-slate-600">Minimum SDG alignment score</p>
+                {/* Sector Granularity */}
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Sector Classification</Label>
+                  <Select 
+                    value={parameters.sectorGranularity} 
+                    onValueChange={(value: 'sector' | 'industry') => setParameters(prev => ({ ...prev, sectorGranularity: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sector">Sector (broad classification)</SelectItem>
+                      <SelectItem value="industry">Industry (detailed classification)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-600">
+                    Choose classification granularity for sector-relative analysis
+                  </p>
+                </div>
+
+                {/* Portfolio Classification Approach */}
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Portfolio Classification</Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="tertile"
+                      checked={parameters.thresholds.tertileApproach}
+                      onCheckedChange={(checked) => setParameters(prev => ({ 
+                        ...prev, 
+                        thresholds: { ...prev.thresholds, tertileApproach: checked } 
+                      }))}
+                      disabled
+                    />
+                    <Label htmlFor="tertile" className="font-normal cursor-pointer">
+                      Sector-relative tertiles (bottom vs top third)
+                    </Label>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Companies classified within their sector: bottom third (climate-aligned) vs top third (baseline)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -261,7 +300,8 @@ export default function Analysis() {
           {/* Filters */}
           <Card>
             <CardHeader>
-              <CardTitle>Filters</CardTitle>
+              <CardTitle>View Filters</CardTitle>
+              <CardDescription>Filter results by investment type, region, and sector</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-4">
@@ -273,21 +313,21 @@ export default function Analysis() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="low_carbon">Low Carbon</SelectItem>
-                      <SelectItem value="decarbonizing">Decarbonizing</SelectItem>
-                      <SelectItem value="solutions">Solutions</SelectItem>
+                      <SelectItem value="low_carbon">Low Carbon Intensity</SelectItem>
+                      <SelectItem value="decarbonizing">Decarbonizing Companies</SelectItem>
+                      <SelectItem value="solutions">Solutions Providers</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Geography</Label>
+                  <Label>Region</Label>
                   <Select value={filters.geography} onValueChange={(value) => setFilters(prev => ({ ...prev, geography: value }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Geographies</SelectItem>
+                      <SelectItem value="all">All Regions</SelectItem>
                       {dimensions?.geographies.map(geo => (
                         <SelectItem key={geo || ''} value={geo || ''}>{geo}</SelectItem>
                       ))}
@@ -296,13 +336,13 @@ export default function Analysis() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Sector</Label>
+                  <Label>{parameters.sectorGranularity === 'industry' ? 'Industry' : 'Sector'}</Label>
                   <Select value={filters.sector} onValueChange={(value) => setFilters(prev => ({ ...prev, sector: value }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Sectors</SelectItem>
+                      <SelectItem value="all">All {parameters.sectorGranularity === 'industry' ? 'Industries' : 'Sectors'}</SelectItem>
                       {dimensions?.sectors.map(sector => (
                         <SelectItem key={sector || ''} value={sector || ''}>{sector}</SelectItem>
                       ))}
@@ -322,7 +362,10 @@ export default function Analysis() {
             <Card>
               <CardHeader>
                 <CardTitle>Implied Decarbonization Rates</CardTitle>
-                <CardDescription>Annual emission reduction rates inferred from market valuations (%)</CardDescription>
+                <CardDescription>
+                  Annual emission reduction rates inferred from market valuations (%)
+                  {parameters.methodology === 'dcf' && ' - DCF methodology'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={400}>
@@ -347,7 +390,7 @@ export default function Analysis() {
                   <div>
                     <h3 className="text-lg font-semibold text-slate-900 mb-2">No Analysis Results Yet</h3>
                     <p className="text-slate-600 mb-6">
-                      Click "Run Analysis" to calculate implied decarbonization rates
+                      Configure parameters and click "Run Analysis" to calculate implied decarbonization rates
                     </p>
                   </div>
                 </div>
