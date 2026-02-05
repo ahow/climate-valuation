@@ -1,0 +1,23 @@
+{
+  "query": "SELECT * FROM data_uploads WHERE id = 30002;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user ovDZf4AdgM1wjio.97e32be5c07f --database DTAXpJhcj6LWb66xpd73se --execute SELECT * FROM data_uploads WHERE id = 30002;",
+  "rows": [
+    {
+      "id": "30002",
+      "user_id": "1",
+      "filename": "CarbonData2301a.xlsx",
+      "file_key": "uploads/1/1770247283083-CarbonData2301a.xlsx",
+      "file_url": "https://d2xsxph8kpxj0f.cloudfront.net/310419663031471125/DTAXpJhcj6LWb66xpd73se/uploads/1/1770247283083-CarbonData2301a.xlsx",
+      "status": "completed",
+      "companies_count": "2442",
+      "time_periods_count": "193",
+      "error_message": "NULL",
+      "createdAt": "2026-02-04 23:21:24",
+      "completedAt": "2026-02-04 23:22:51"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuser_id\tfilename\tfile_key\tfile_url\tstatus\tcompanies_count\ttime_periods_count\terror_message\tcreatedAt\tcompletedAt\n30002\t1\tCarbonData2301a.xlsx\tuploads/1/1770247283083-CarbonData2301a.xlsx\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663031471125/DTAXpJhcj6LWb66xpd73se/uploads/1/1770247283083-CarbonData2301a.xlsx\tcompleted\t2442\t193\tNULL\t2026-02-04 23:21:24\t2026-02-04 23:22:51\n",
+  "stderr": "",
+  "execution_time_ms": 153
+}

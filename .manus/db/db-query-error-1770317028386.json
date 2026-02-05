@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, status, company_count, time_period_count FROM uploads WHERE id = 30002;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user ovDZf4AdgM1wjio.97e32be5c07f --database DTAXpJhcj6LWb66xpd73se --execute SELECT id, status, company_count, time_period_count FROM uploads WHERE id = 30002;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'dtaxpjhcj6lwb66xpd73se.uploads' doesn't exist"
+  ]
+}

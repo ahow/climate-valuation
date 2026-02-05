@@ -160,3 +160,16 @@
 - [ ] Display component values (total emissions, total profit, total market cap) for transparency
 - [ ] Test calculation with updated spreadsheet containing Profit sheet
 - [ ] Sense-check results: typical carbon prices range $10-200/tCO2
+
+## Total-Based Carbon Price UI Visualization
+- [x] Add tRPC query to fetch total-based carbon price data from calculateTotalBasedCarbonPrice endpoint
+- [x] Add state management for method toggle (sector-relative vs absolute) - reusing tercileMethod state
+- [x] Create chart component showing implied carbon price over time ($/tCO2)
+- [x] Add component breakdown cards showing total emissions, profit, market cap for transparency
+- [x] Display P/E ratios for top and bottom terciles
+- [x] Add proper Y-axis formatting for carbon price ($/tCO2)
+- [x] Add methodology explanation with step-by-step calculation
+- [x] Add unit validation panel showing all component units
+- [ ] Test visualization with real data (blocked by performance issue: loading 470K time series records times out)
+- [ ] Optimize getCompaniesWithTimeSeries to limit data loading or use pagination
+- [ ] Consider pre-computing tercile assignments during data upload instead of runtime calculation

@@ -130,26 +130,30 @@ export async function getCompaniesWithTimeSeries(uploadId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Get all companies for this upload
+  // Load all companies
   const allCompanies = await db.select().from(companies);
   
-  // Get all time series data
+  // Load all time series data in one query
   const allTimeSeries = await db.select().from(timeSeries);
   
-  // Group time series by company
-  const timeSeriesByCompany = new Map<number, typeof allTimeSeries>();
+  // Group time series by company ID
+  const timeSeriesByCompanyId = new Map<number, typeof allTimeSeries>();
   for (const ts of allTimeSeries) {
-    if (!timeSeriesByCompany.has(ts.companyId)) {
-      timeSeriesByCompany.set(ts.companyId, []);
+    if (!timeSeriesByCompanyId.has(ts.companyId)) {
+      timeSeriesByCompanyId.set(ts.companyId, []);
     }
-    timeSeriesByCompany.get(ts.companyId)!.push(ts);
+    timeSeriesByCompanyId.get(ts.companyId)!.push(ts);
   }
   
   // Combine companies with their time series
-  return allCompanies.map(company => ({
-    ...company,
-    timeSeries: timeSeriesByCompany.get(company.id) || [],
-  })).filter(c => c.timeSeries.length > 0);
+  return allCompanies
+    .map(company => ({
+      ...company,
+      timeSeries: (timeSeriesByCompanyId.get(company.id) || []).sort((a, b) => 
+        a.date.getTime() - b.date.getTime()
+      ),
+    }))
+    .filter(c => c.timeSeries.length > 0);
 }
 
 export async function getCompaniesByGeography(geography: string) {

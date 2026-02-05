@@ -59,6 +59,16 @@ export default function Analysis() {
     { enabled: !!uploadId && isAuthenticated && uploadStatus?.status === 'completed' }
   );
 
+  const carbonPriceQuery = trpc.analysis.calculateTotalBasedCarbonPrice.useQuery(
+    {
+      uploadId: uploadIdNum,
+      method: tercileMethod,
+      winsorize: parameters.winsorize,
+      winsorizePercentile: parameters.winsorizePercentile,
+    },
+    { enabled: !!uploadId && isAuthenticated && uploadStatus?.status === 'completed' }
+  );
+
   const analyzeMutation = trpc.analysis.analyze.useMutation({
     onSuccess: () => {
       toast.success("Analysis completed successfully!");
@@ -548,6 +558,148 @@ export default function Analysis() {
                       {(tercileQuery.data.reduce((sum, d) => sum + d.topTercilePE, 0) / tercileQuery.data.length).toFixed(2)}
                     </p>
                     <p className="text-xs text-slate-500 mt-1">Highest carbon intensity</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Total-Based Implied Carbon Price */}
+          {carbonPriceQuery.data && carbonPriceQuery.data.length > 0 && (
+            <Card className="mt-8">
+              <CardHeader>
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Implied Carbon Price (Total-Based Methodology)
+                  </CardTitle>
+                  <CardDescription>
+                    Carbon price inferred from total market cap, net profit, and emissions of top vs bottom terciles
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Methodology Explanation */}
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-2">Calculation Methodology</h4>
+                  <div className="text-sm text-blue-800 space-y-2">
+                    <p><strong>Step 1:</strong> Sum total market cap, net profit, and emissions for top tercile (high carbon) and bottom tercile (low carbon)</p>
+                    <p><strong>Step 2:</strong> Calculate P/E ratios: P/E = Total Market Cap / Total Net Profit</p>
+                    <p><strong>Step 3:</strong> Implied Carbon Price = (Top Net Profit - (Top Market Cap / Bottom P/E)) / Top Emissions</p>
+                    <p className="text-xs mt-2 italic">This represents: what carbon price ($/tCO2) would equalize the P/E ratios between high-carbon and low-carbon companies?</p>
+                  </div>
+                </div>
+
+                {/* Summary Statistics */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Avg Carbon Price</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      ${(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.impliedCarbonPrice, 0) / carbonPriceQuery.data.length).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">per tonne CO2</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Avg Top Tercile P/E</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.topPE, 0) / carbonPriceQuery.data.length).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">High carbon intensity</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Avg Bottom Tercile P/E</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.bottomPE, 0) / carbonPriceQuery.data.length).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Low carbon intensity</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Valuation Premium</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.valuationPremium, 0) / carbonPriceQuery.data.length).toFixed(2)}%
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Low-carbon vs high-carbon</p>
+                  </div>
+                </div>
+
+                {/* Chart */}
+                <div className="h-96">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={carbonPriceQuery.data.map((d: any) => ({
+                      date: new Date(d.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
+                      carbonPrice: d.impliedCarbonPrice,
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 12 }}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }}
+                        label={{ value: 'Carbon Price ($/tCO2)', angle: -90, position: 'insideLeft' }}
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [`$${value.toFixed(2)}/tCO2`, 'Carbon Price']}
+                        labelStyle={{ color: '#1e293b' }}
+                      />
+                      <Legend />
+                      <Line type="monotone" dataKey="carbonPrice" name="Implied Carbon Price" stroke="#3b82f6" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Component Breakdown */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <h5 className="font-semibold text-slate-900 mb-2">Top Tercile (High Carbon)</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Total Market Cap:</span>
+                        <span className="font-medium">${(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.topTotalMarketCap, 0) / carbonPriceQuery.data.length / 1000).toFixed(1)}B</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Total Profit:</span>
+                        <span className="font-medium">${(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.topTotalProfit, 0) / carbonPriceQuery.data.length / 1000).toFixed(1)}B</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Total Emissions:</span>
+                        <span className="font-medium">{(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.topTotalEmissions, 0) / carbonPriceQuery.data.length / 1000).toFixed(1)}k tCO2</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Company Count:</span>
+                        <span className="font-medium">{Math.round(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.topCompanyCount, 0) / carbonPriceQuery.data.length)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <h5 className="font-semibold text-slate-900 mb-2">Bottom Tercile (Low Carbon)</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Total Market Cap:</span>
+                        <span className="font-medium">${(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.bottomTotalMarketCap, 0) / carbonPriceQuery.data.length / 1000).toFixed(1)}B</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Total Profit:</span>
+                        <span className="font-medium">${(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.bottomTotalProfit, 0) / carbonPriceQuery.data.length / 1000).toFixed(1)}B</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Avg Company Count:</span>
+                        <span className="font-medium">{Math.round(carbonPriceQuery.data.reduce((sum: number, d: any) => sum + d.bottomCompanyCount, 0) / carbonPriceQuery.data.length)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 border border-slate-200 rounded-lg bg-blue-50">
+                    <h5 className="font-semibold text-slate-900 mb-2">Unit Validation</h5>
+                    <div className="space-y-2 text-sm text-slate-700">
+                      <div><strong>Market Cap:</strong> $M (millions)</div>
+                      <div><strong>Net Profit:</strong> $M/year</div>
+                      <div><strong>Emissions:</strong> tCO2/year</div>
+                      <div><strong>P/E Ratio:</strong> years</div>
+                      <div><strong>Carbon Price:</strong> $/tCO2</div>
+                      <div className="text-xs text-slate-600 mt-2 italic">All units validated via unit tests</div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
