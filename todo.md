@@ -116,3 +116,9 @@
 - [x] Generate 4,832 analysis results across all dates, sectors, and investment types
 - [x] Verify results display in UI with chart visualization
 - [ ] Fix carbon intensity calculation (currently showing 0 values)
+
+## Chart Visualization Improvements
+- [x] Format Y-axis to show readable percentage values (not scientific notation)
+- [x] Allow negative values on Y-axis (negative decarbonization rates are meaningful)
+- [x] Add tooltip or documentation explaining decarbonization rate calculation methodology
+- [x] Test chart with improved formatting

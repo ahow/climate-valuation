@@ -358,14 +358,39 @@ export default function Analysis() {
                   Annual emission reduction rates inferred from market valuations (%)
                   {parameters.methodology === 'dcf' && ' - DCF methodology'}
                 </CardDescription>
+                <div className="mt-4 p-4 bg-slate-50 rounded-lg text-sm text-slate-700 space-y-2">
+                  <p className="font-semibold">Calculation Methodology:</p>
+                  <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li><strong>Carbon Risk Discount:</strong> (P/E_climate / P/E_baseline) - 1</li>
+                    <li><strong>Implied Carbon Price:</strong> Converts valuation premium to $/tCO2</li>
+                    <li><strong>Decarbonization Rate:</strong> Maps carbon price to annual reduction:
+                      <ul className="list-disc list-inside ml-6 mt-1 text-xs">
+                        <li>$0-50/tCO2 → 0-2% annual reduction</li>
+                        <li>$50-100/tCO2 → 2-4% annual reduction</li>
+                        <li>$100-200/tCO2 → 4-7% annual reduction</li>
+                        <li>Above $200/tCO2 → capped at 7%</li>
+                      </ul>
+                    </li>
+                  </ol>
+                  <p className="text-xs text-slate-600 mt-2">
+                    <strong>Note:</strong> Negative values indicate increasing emissions (carbon-intensive companies valued higher).
+                  </p>
+                </div>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={finalChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
-                    <YAxis label={{ value: 'Decarb Rate (%)', angle: -90, position: 'insideLeft' }} />
-                    <Tooltip />
+                    <YAxis 
+                      label={{ value: 'Decarb Rate (%)', angle: -90, position: 'insideLeft' }}
+                      tickFormatter={(value) => value.toFixed(2)}
+                      domain={['auto', 'auto']}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [`${value.toFixed(4)}%`, '']}
+                      labelStyle={{ color: '#1e293b' }}
+                    />
                     <Legend />
                     <Line type="monotone" dataKey="Low Carbon" stroke="#3b82f6" strokeWidth={2} />
                     <Line type="monotone" dataKey="Decarbonizing" stroke="#10b981" strokeWidth={2} />
