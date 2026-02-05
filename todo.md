@@ -144,3 +144,19 @@
 - [x] Write unit tests for tercile calculation logic (tested via browser and network logs)
 - [x] Verified chart displays correctly with real data
 - [x] Confirmed 66% average valuation premium for low-carbon companies
+
+## Rigorous Implied Carbon Price Calculation
+- [x] Update data processor to import Profit sheet from Excel
+- [x] Add profit data to time_series table schema
+- [x] Fix date offset issue between RI and Profit sheets (implemented fuzzy date matching with 30-day tolerance)
+- [x] Validate units for all components (market cap: $M, net profit: $M/year, emissions: tCO2/year, carbon price: $/tCO2)
+- [x] Add unit conversion: multiply by 1,000,000 to convert $M/tCO2 to $/tCO2
+- [x] Write and pass 4 unit tests validating calculation logic and unit consistency
+- [x] Implement total-based calculation: sum market cap, net profit, and emissions for each tercile
+- [x] Calculate implied carbon price using formula: (Top Net Profit - (Top Market Cap / Bottom P/E)) / Top Emissions
+- [x] Add new endpoint to return implied carbon price time series with component breakdown
+- [x] Add getCompaniesWithTimeSeries function to db.ts
+- [ ] Create visualization showing implied carbon price over time with unit labels
+- [ ] Display component values (total emissions, total profit, total market cap) for transparency
+- [ ] Test calculation with updated spreadsheet containing Profit sheet
+- [ ] Sense-check results: typical carbon prices range $10-200/tCO2

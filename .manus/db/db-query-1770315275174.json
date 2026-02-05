@@ -1,0 +1,18 @@
+{
+  "query": "SELECT \n  COUNT(*) as total_records,\n  COUNT(net_profit) as records_with_profit,\n  ROUND(COUNT(net_profit) * 100.0 / COUNT(*), 1) as profit_coverage_pct,\n  ROUND(AVG(net_profit), 2) as avg_profit,\n  ROUND(MIN(net_profit), 2) as min_profit,\n  ROUND(MAX(net_profit), 2) as max_profit\nFROM time_series;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user ovDZf4AdgM1wjio.97e32be5c07f --database DTAXpJhcj6LWb66xpd73se --execute SELECT \n  COUNT(*) as total_records,\n  COUNT(net_profit) as records_with_profit,\n  ROUND(COUNT(net_profit) * 100.0 / COUNT(*), 1) as profit_coverage_pct,\n  ROUND(AVG(net_profit), 2) as avg_profit,\n  ROUND(MIN(net_profit), 2) as min_profit,\n  ROUND(MAX(net_profit), 2) as max_profit\nFROM time_series;",
+  "rows": [
+    {
+      "total_records": "470341",
+      "records_with_profit": "394389",
+      "profit_coverage_pct": "83.9",
+      "avg_profit": "1698.63",
+      "min_profit": "-72245.81",
+      "max_profit": "322552"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_records\trecords_with_profit\tprofit_coverage_pct\tavg_profit\tmin_profit\tmax_profit\n470341\t394389\t83.9\t1698.63\t-72245.81\t322552\n",
+  "stderr": "",
+  "execution_time_ms": 1196
+}

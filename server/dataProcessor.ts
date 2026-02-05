@@ -52,6 +52,7 @@ export interface RawSheetData {
   S2: any[];
   S3: any[];
   PE: any[];
+  Profit: any[];
   GreenRev: any[];
   EmissionTargets: any[];
 }
@@ -62,7 +63,7 @@ export interface RawSheetData {
 export function parseExcelFile(buffer: Buffer): RawSheetData {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
 
-  const sheetNames = ['Descriptive', 'RI', 'MV', 'S1', 'S2', 'S3', 'PE', 'GreenRev', 'EmissionTargets'];
+  const sheetNames = ['Descriptive', 'RI', 'MV', 'S1', 'S2', 'S3', 'PE', 'Profit', 'GreenRev', 'EmissionTargets'];
   const data: any = {};
 
   for (const sheetName of sheetNames) {
@@ -274,7 +275,7 @@ function findClosestFY(date: Date): string {
  * Process all data and transform into database-ready format
  */
 export function processClimateData(rawData: RawSheetData): ProcessedData {
-  const { Descriptive, RI, MV, PE, S1, S2, S3, GreenRev, EmissionTargets } = rawData;
+  const { Descriptive, RI, MV, PE, Profit, S1, S2, S3, GreenRev, EmissionTargets } = rawData;
 
   // Build mappings
   const nameToIsin = buildNameToIsinMap(Descriptive);
@@ -347,6 +348,67 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
   }
   console.log(`Mapped ${isinToPeCol.size} ISINs to PE columns`);
 
+  // Pre-index Profit data by date with sorted timestamps for fuzzy matching
+  console.log('Pre-indexing Profit data by date...');
+  const profitByDate = new Map<number, any>();
+  const profitTimestamps: number[] = [];
+  for (const row of Profit) {
+    const dateValue = row['Name'];
+    let date: Date;
+    if (typeof dateValue === 'number') {
+      date = excelSerialToDate(dateValue);
+    } else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else {
+      continue;
+    }
+    if (!isNaN(date.getTime())) {
+      const timestamp = date.getTime();
+      profitByDate.set(timestamp, row);
+      profitTimestamps.push(timestamp);
+    }
+  }
+  profitTimestamps.sort((a, b) => a - b);
+  console.log(`Indexed ${profitTimestamps.length} profit dates`);
+
+  // Helper function to find closest profit row within 30 days
+  function findClosestProfitRow(targetTimestamp: number): any | null {
+    // Try exact match first
+    if (profitByDate.has(targetTimestamp)) {
+      return profitByDate.get(targetTimestamp);
+    }
+
+    // Binary search for closest timestamp
+    let left = 0;
+    let right = profitTimestamps.length - 1;
+    let closestIdx = -1;
+    let minDiff = Infinity;
+
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+      const diff = Math.abs(profitTimestamps[mid] - targetTimestamp);
+      
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = mid;
+      }
+
+      if (profitTimestamps[mid] < targetTimestamp) {
+        left = mid + 1;
+      } else {
+        right = mid - 1;
+      }
+    }
+
+    // Check if closest is within 30 days (30 * 24 * 60 * 60 * 1000 ms)
+    const maxDiff = 30 * 24 * 60 * 60 * 1000;
+    if (closestIdx >= 0 && minDiff <= maxDiff) {
+      return profitByDate.get(profitTimestamps[closestIdx]);
+    }
+
+    return null;
+  }
+
   console.log(`Processing ${RI.length} time periods...`);
   let processedRows = 0;
   for (const row of RI) {
@@ -370,9 +432,10 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
 
     dates.add(date);
 
-    // Fast lookup of corresponding rows in MV and PE
+    // Fast lookup of corresponding rows in MV, PE, and Profit
     const mvRow = mvByDate.get(date.getTime());
     const peRow = peByDate.get(date.getTime());
+    const profitRow = findClosestProfitRow(date.getTime());
 
     // Process each company column
     for (const colName of riColumns) {
@@ -389,6 +452,9 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
       
       // For PE, use pre-built ISIN-to-PE-column map
       const peColName = isinToPeCol.get(isin);
+      
+      // Build Profit column name: replace "TOT RETURN IND" with "FY2 INC MEAN EST"
+      const profitColName = colName.replace('TOT RETURN IND', 'FY2 INC MEAN EST');
 
       // Get emissions for this date (use closest fiscal year)
       const fy = findClosestFY(date);
@@ -403,6 +469,7 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
         scope1Emissions: sanitizeNumeric(emissions?.s1),
         scope2Emissions: sanitizeNumeric(emissions?.s2),
         scope3Emissions: sanitizeNumeric(emissions?.s3),
+        netProfit: sanitizeNumeric(profitRow?.[profitColName]),
       };
 
       timeSeries.push(tsData);

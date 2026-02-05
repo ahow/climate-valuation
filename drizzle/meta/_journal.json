@@ -15,6 +15,13 @@
       "when": 1770164090737,
       "tag": "0001_unknown_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1770313043876,
+      "tag": "0002_secret_ravenous",
+      "breakpoints": true
     }
   ]
 }

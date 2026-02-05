@@ -1,0 +1,1 @@
+ALTER TABLE `time_series` ADD `net_profit` float;

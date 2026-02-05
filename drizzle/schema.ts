@@ -53,6 +53,7 @@ export const timeSeries = mysqlTable("time_series", {
   scope1Emissions: float("scope1_emissions"),
   scope2Emissions: float("scope2_emissions"),
   scope3Emissions: float("scope3_emissions"),
+  netProfit: float("net_profit"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   companyDateIdx: unique("company_date_idx").on(table.companyId, table.date),

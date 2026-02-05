@@ -126,6 +126,32 @@ export async function getAllCompanies() {
   return await db.select().from(companies);
 }
 
+export async function getCompaniesWithTimeSeries(uploadId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get all companies for this upload
+  const allCompanies = await db.select().from(companies);
+  
+  // Get all time series data
+  const allTimeSeries = await db.select().from(timeSeries);
+  
+  // Group time series by company
+  const timeSeriesByCompany = new Map<number, typeof allTimeSeries>();
+  for (const ts of allTimeSeries) {
+    if (!timeSeriesByCompany.has(ts.companyId)) {
+      timeSeriesByCompany.set(ts.companyId, []);
+    }
+    timeSeriesByCompany.get(ts.companyId)!.push(ts);
+  }
+  
+  // Combine companies with their time series
+  return allCompanies.map(company => ({
+    ...company,
+    timeSeries: timeSeriesByCompany.get(company.id) || [],
+  })).filter(c => c.timeSeries.length > 0);
+}
+
 export async function getCompaniesByGeography(geography: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
