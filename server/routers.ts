@@ -5,6 +5,8 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { parseExcelFile, processClimateData } from "./dataProcessor";
+import { computeTercilesForUpload } from "./tercileCalculator";
+import { calculateTotalBasedCarbonPrice as computeCarbonPrice } from "./carbonPriceCalculator";
 import { runFullAnalysis, type AnalysisParameters, type CompanyWithTimeSeries, mapGeographyToRegion } from "./portfolioAnalyzerV2";
 import { storagePut } from "./storage";
 
@@ -87,6 +89,11 @@ export const appRouter = router({
             console.log(`[Upload ${uploadId}] Inserting ${timeSeriesWithIds.length} time series records in batches...`);
             await db.insertTimeSeriesBatch(timeSeriesWithIds);
             console.log(`[Upload ${uploadId}] Time series insertion completed.`);
+
+            // Compute tercile assignments
+            console.log(`[Upload ${uploadId}] Computing tercile assignments...`);
+            await computeTercilesForUpload(uploadId);
+            console.log(`[Upload ${uploadId}] Tercile computation completed.`);
 
             // Update upload status
             console.log(`[Upload ${uploadId}] Processing completed successfully.`);
@@ -377,159 +384,13 @@ export const appRouter = router({
       .input(z.object({
         uploadId: z.number(),
         method: z.enum(['absolute', 'sector_relative']).default('sector_relative'),
+        includeScope3: z.boolean().default(false),
         winsorize: z.boolean().default(true),
         winsorizePercentile: z.number().min(0).max(50).default(5),
       }))
       .query(async ({ input }) => {
-        const { uploadId, method, winsorize, winsorizePercentile } = input;
-
-        // Load all companies with time series data
-        const companies = await db.getCompaniesWithTimeSeries(uploadId);
-        if (companies.length === 0) {
-          return [];
-        }
-
-        // Helper function to winsorize values
-        function winsorizeValues(values: number[], lowerPercentile: number, upperPercentile: number): number[] {
-          if (values.length === 0) return values;
-          const sorted = [...values].sort((a, b) => a - b);
-          const lowerIdx = Math.floor(values.length * lowerPercentile / 100);
-          const upperIdx = Math.floor(values.length * (100 - upperPercentile) / 100) - 1;
-          const lowerBound = sorted[lowerIdx];
-          const upperBound = sorted[upperIdx];
-          return values.map(v => Math.max(lowerBound, Math.min(upperBound, v)));
-        }
-
-        // Group time series by date
-        const dateMap = new Map<string, typeof companies>();
-        for (const company of companies) {
-          for (const ts of company.timeSeries) {
-            const dateKey = ts.date.toISOString();
-            if (!dateMap.has(dateKey)) {
-              dateMap.set(dateKey, []);
-            }
-            dateMap.get(dateKey)!.push({
-              ...company,
-              timeSeries: [ts],
-            });
-          }
-        }
-
-        const results = [];
-        for (const [dateKey, companiesAtDate] of Array.from(dateMap.entries())) {
-          const date = new Date(dateKey);
-
-          // Filter companies with all required data
-          const validCompanies = companiesAtDate.filter((c: any) => {
-            const ts = c.timeSeries[0];
-            return ts.marketCap != null && ts.priceEarnings != null && ts.netProfit != null &&
-                   (ts.scope1Emissions != null || ts.scope2Emissions != null);
-          });
-
-          if (validCompanies.length < 20) continue; // Need sufficient data
-
-          // Calculate carbon intensity for each company
-          const companiesWithIntensity = validCompanies.map((c: any) => {
-            const ts = c.timeSeries[0];
-            const emissions = (ts.scope1Emissions || 0) + (ts.scope2Emissions || 0);
-            const intensity = ts.marketCap! > 0 ? emissions / ts.marketCap! : 0;
-            return { ...c, carbonIntensity: intensity, timeSeries: [ts] };
-          }).filter((c: any) => c.carbonIntensity > 0);
-
-          if (companiesWithIntensity.length < 20) continue;
-
-          // Classify into terciles based on carbon intensity
-          let topTercile: typeof companiesWithIntensity = [];
-          let bottomTercile: typeof companiesWithIntensity = [];
-
-          if (method === 'sector_relative') {
-            // Group by sector and classify within each sector
-            const bySector = new Map<string, typeof companiesWithIntensity>();
-            for (const c of companiesWithIntensity) {
-              if (!bySector.has(c.sector)) {
-                bySector.set(c.sector, []);
-              }
-              bySector.get(c.sector)!.push(c);
-            }
-
-            for (const [sector, sectorCompanies] of Array.from(bySector.entries())) {
-              if (sectorCompanies.length < 6) continue; // Need at least 6 for terciles
-              const sorted = [...sectorCompanies].sort((a, b) => a.carbonIntensity - b.carbonIntensity);
-              const tercileSize = Math.floor(sorted.length / 3);
-              bottomTercile.push(...sorted.slice(0, tercileSize)); // Lowest intensity
-              topTercile.push(...sorted.slice(-tercileSize)); // Highest intensity
-            }
-          } else {
-            // Absolute terciles
-            const sorted = [...companiesWithIntensity].sort((a, b) => a.carbonIntensity - b.carbonIntensity);
-            const tercileSize = Math.floor(sorted.length / 3);
-            bottomTercile = sorted.slice(0, tercileSize);
-            topTercile = sorted.slice(-tercileSize);
-          }
-
-          if (topTercile.length === 0 || bottomTercile.length === 0) continue;
-
-          // Calculate totals for top tercile (high carbon)
-          let topMarketCaps = topTercile.map((c: any) => c.timeSeries[0].marketCap!);
-          let topProfits = topTercile.map((c: any) => c.timeSeries[0].netProfit!);
-          let topEmissionsArray = topTercile.map((c: any) => {
-            const ts = c.timeSeries[0];
-            return (ts.scope1Emissions || 0) + (ts.scope2Emissions || 0);
-          });
-
-          // Apply winsorization if enabled
-          if (winsorize && topMarketCaps.length > 10) {
-            topMarketCaps = winsorizeValues(topMarketCaps, winsorizePercentile, 100 - winsorizePercentile);
-            topProfits = winsorizeValues(topProfits, winsorizePercentile, 100 - winsorizePercentile);
-            topEmissionsArray = winsorizeValues(topEmissionsArray, winsorizePercentile, 100 - winsorizePercentile);
-          }
-
-          const topTotalMarketCap = topMarketCaps.reduce((sum: number, v: number) => sum + v, 0);
-          const topTotalProfit = topProfits.reduce((sum: number, v: number) => sum + v, 0);
-          const topTotalEmissions = topEmissionsArray.reduce((sum: number, v: number) => sum + v, 0);
-
-          // Calculate totals for bottom tercile (low carbon)
-          let bottomMarketCaps = bottomTercile.map((c: any) => c.timeSeries[0].marketCap!);
-          let bottomProfits = bottomTercile.map((c: any) => c.timeSeries[0].netProfit!);
-
-          if (winsorize && bottomMarketCaps.length > 10) {
-            bottomMarketCaps = winsorizeValues(bottomMarketCaps, winsorizePercentile, 100 - winsorizePercentile);
-            bottomProfits = winsorizeValues(bottomProfits, winsorizePercentile, 100 - winsorizePercentile);
-          }
-
-          const bottomTotalMarketCap = bottomMarketCaps.reduce((sum: number, v: number) => sum + v, 0);
-          const bottomTotalProfit = bottomProfits.reduce((sum: number, v: number) => sum + v, 0);
-
-          // Calculate P/E ratios from totals
-          const topPE = topTotalMarketCap / topTotalProfit;
-          const bottomPE = bottomTotalMarketCap / bottomTotalProfit;
-
-          // Calculate implied carbon price
-          // Formula: (Top Net Profit - (Top Market Cap / Bottom P/E)) / Top Emissions
-          // This represents: what carbon price would equalize the P/E ratios?
-          const impliedTargetProfit = topTotalMarketCap / bottomPE;
-          const profitDifference = topTotalProfit - impliedTargetProfit;
-          // Result is in $M/tCO2, convert to $/tCO2 by multiplying by 1,000,000
-          const impliedCarbonPriceRaw = topTotalEmissions > 0 ? profitDifference / topTotalEmissions : 0;
-          const impliedCarbonPrice = impliedCarbonPriceRaw * 1000000; // Convert $M/tCO2 to $/tCO2
-
-          results.push({
-            date: date.toISOString(),
-            topTotalMarketCap, // $M
-            topTotalProfit, // $M/year
-            topTotalEmissions, // tCO2/year
-            topPE, // years
-            topCompanyCount: topTercile.length,
-            bottomTotalMarketCap, // $M
-            bottomTotalProfit, // $M/year
-            bottomPE, // years
-            bottomCompanyCount: bottomTercile.length,
-            impliedCarbonPrice, // $/tCO2
-            valuationPremium: (bottomPE / topPE - 1) * 100, // % premium for low-carbon
-          });
-        }
-
-        return results.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const { uploadId, method, includeScope3, winsorize, winsorizePercentile } = input;
+        return await computeCarbonPrice(uploadId, method, includeScope3, winsorize, winsorizePercentile);
       }),
   }),
 

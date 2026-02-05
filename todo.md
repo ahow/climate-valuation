@@ -173,3 +173,16 @@
 - [ ] Test visualization with real data (blocked by performance issue: loading 470K time series records times out)
 - [ ] Optimize getCompaniesWithTimeSeries to limit data loading or use pagination
 - [ ] Consider pre-computing tercile assignments during data upload instead of runtime calculation
+
+## Performance Optimization: Pre-computation and Caching
+- [x] Add company_terciles table to schema (company_id, date, method, carbon_intensity, tercile_assignment)
+- [x] Add carbon_price_cache table to schema (upload_id, date, method, top_tercile_data, bottom_tercile_data, implied_carbon_price)
+- [x] Push schema changes to database
+- [x] Update data processor to calculate and store tercile assignments during upload
+- [x] Update calculateTotalBasedCarbonPrice endpoint to check cache first
+- [x] Implement cache population logic in analysis endpoint
+- [x] Rewrite endpoint to use pre-computed terciles instead of loading 470K records
+- [ ] Re-upload data to trigger tercile pre-computation (requires user action)
+- [ ] Test performance improvement (should load instantly from cache after re-upload)
+- [x] UI already has carbon price chart component (added in previous checkpoint)
+- [ ] Verify carbon price chart displays correctly with cached data (after re-upload)

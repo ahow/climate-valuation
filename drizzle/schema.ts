@@ -110,3 +110,71 @@ export const analysisResults = mysqlTable("analysis_results", {
 
 export type AnalysisResult = typeof analysisResults.$inferSelect;
 export type InsertAnalysisResult = typeof analysisResults.$inferInsert;
+
+/**
+ * Pre-computed tercile assignments for companies
+ */
+export const companyTerciles = mysqlTable("company_terciles", {
+  id: int("id").autoincrement().primaryKey(),
+  uploadId: int("upload_id").notNull(),
+  companyId: int("company_id").notNull(),
+  date: timestamp("date").notNull(),
+  method: mysqlEnum("method", ["absolute", "sector_relative"]).notNull(),
+  includeScope3: int("include_scope3").notNull(), // 0 or 1 (boolean)
+  carbonIntensity: float("carbon_intensity"),
+  tercileAssignment: mysqlEnum("tercile_assignment", ["bottom", "middle", "top"]),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  uploadCompanyDateIdx: unique("upload_company_date_method_idx").on(
+    table.uploadId,
+    table.companyId,
+    table.date,
+    table.method,
+    table.includeScope3
+  ),
+  uploadDateIdx: index("upload_date_idx").on(table.uploadId, table.date),
+  tercileIdx: index("tercile_idx").on(table.tercileAssignment),
+}));
+
+export type CompanyTercile = typeof companyTerciles.$inferSelect;
+export type InsertCompanyTercile = typeof companyTerciles.$inferInsert;
+
+/**
+ * Cached carbon price calculations
+ */
+export const carbonPriceCache = mysqlTable("carbon_price_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  uploadId: int("upload_id").notNull(),
+  date: timestamp("date").notNull(),
+  method: mysqlEnum("method", ["absolute", "sector_relative"]).notNull(),
+  includeScope3: int("include_scope3").notNull(),
+  winsorize: int("winsorize").notNull(),
+  winsorizePercentile: int("winsorize_percentile"),
+  // Top tercile aggregates
+  topTercileEmissions: float("top_tercile_emissions"),
+  topTercileProfit: float("top_tercile_profit"),
+  topTercileMarketCap: float("top_tercile_market_cap"),
+  topTercilePeRatio: float("top_tercile_pe_ratio"),
+  topTercileCompanyCount: int("top_tercile_company_count"),
+  // Bottom tercile aggregates
+  bottomTercileEmissions: float("bottom_tercile_emissions"),
+  bottomTercileProfit: float("bottom_tercile_profit"),
+  bottomTercileMarketCap: float("bottom_tercile_market_cap"),
+  bottomTercilePeRatio: float("bottom_tercile_pe_ratio"),
+  bottomTercileCompanyCount: int("bottom_tercile_company_count"),
+  // Calculated values
+  impliedCarbonPrice: float("implied_carbon_price"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  uploadDateMethodIdx: unique("upload_date_method_params_idx").on(
+    table.uploadId,
+    table.date,
+    table.method,
+    table.includeScope3,
+    table.winsorize,
+    table.winsorizePercentile
+  ),
+}));
+
+export type CarbonPriceCache = typeof carbonPriceCache.$inferSelect;
+export type InsertCarbonPriceCache = typeof carbonPriceCache.$inferInsert;
