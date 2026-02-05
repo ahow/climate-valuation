@@ -52,36 +52,44 @@ export const appRouter = router({
         // Process file asynchronously
         (async () => {
           try {
+            console.log(`[Upload ${uploadId}] Parsing Excel file...`);
             // Parse Excel file
             const rawData = parseExcelFile(buffer);
 
+            console.log(`[Upload ${uploadId}] Processing climate data...`);
             // Process data
             const processedData = processClimateData(rawData);
+            console.log(`[Upload ${uploadId}] Parsed ${processedData.stats.totalCompanies} companies, ${processedData.timeSeries.length} time series records.`);
 
             // Insert companies
+            console.log(`[Upload ${uploadId}] Inserting ${processedData.companies.length} companies...`);
             for (const company of processedData.companies) {
               await db.upsertCompany(company);
             }
+            console.log(`[Upload ${uploadId}] Companies inserted.`);
 
             // Get company IDs
             const companies = await db.getAllCompanies();
             const isinToId = new Map(companies.map(c => [c.isin, c.id!]));
 
-            // Insert time series with correct company IDs
-            for (const ts of processedData.timeSeries) {
-              const companyIsin = processedData.companies[ts.companyId - 1]?.isin;
-              if (!companyIsin) continue;
+            // Insert time series with correct company IDs in batches
+            console.log(`[Upload ${uploadId}] Preparing ${processedData.timeSeries.length} time series records...`);
+            const timeSeriesWithIds = processedData.timeSeries
+              .map(ts => {
+                const companyIsin = processedData.companies[ts.companyId - 1]?.isin;
+                if (!companyIsin) return null;
+                const actualCompanyId = isinToId.get(companyIsin);
+                if (!actualCompanyId) return null;
+                return { ...ts, companyId: actualCompanyId };
+              })
+              .filter((ts): ts is NonNullable<typeof ts> => ts !== null);
 
-              const actualCompanyId = isinToId.get(companyIsin);
-              if (!actualCompanyId) continue;
-
-              await db.insertTimeSeries({
-                ...ts,
-                companyId: actualCompanyId,
-              });
-            }
+            console.log(`[Upload ${uploadId}] Inserting ${timeSeriesWithIds.length} time series records in batches...`);
+            await db.insertTimeSeriesBatch(timeSeriesWithIds);
+            console.log(`[Upload ${uploadId}] Time series insertion completed.`);
 
             // Update upload status
+            console.log(`[Upload ${uploadId}] Processing completed successfully.`);
             await db.updateDataUploadStatus(uploadId, 'completed', {
               companiesCount: processedData.stats.totalCompanies,
               timePeriodsCount: processedData.stats.totalTimePeriods,

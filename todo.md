@@ -97,3 +97,22 @@
 - [x] Remove auth checks from frontend pages (Upload, Dashboard, Analysis)
 - [x] Remove user-specific data filtering (make all uploads public)
 - [x] Test application without sign-in
+
+## Bug Fix - NA String Values
+- [x] Fix sanitizeNumeric function to handle "NA" strings
+- [x] Verify all data fields are properly sanitized before database insertion
+- [ ] Test upload with real data containing NA values
+
+## Bug Fix - Missing Analysis Endpoint
+- [x] Add analysis router with runAnalysis endpoint
+- [x] Connect frontend Analysis page to backend endpoint
+- [x] Test analysis execution with uploaded data
+
+## Bug Fix - Data Upload and Processing Issues
+- [x] Fix Excel date serial number conversion (dates were showing as 1970-01-01)
+- [x] Fix column name matching between RI, MV, and PE sheets
+- [x] Optimize data processing performance with date indexing and ISIN mapping
+- [x] Successfully load 470,341 time series records with market cap and P/E data
+- [x] Generate 4,832 analysis results across all dates, sectors, and investment types
+- [x] Verify results display in UI with chart visualization
+- [ ] Fix carbon intensity calculation (currently showing 0 values)

@@ -1,6 +1,36 @@
 import * as XLSX from 'xlsx';
 import { InsertCompany, InsertTimeSeries } from '../drizzle/schema';
 
+/**
+ * Convert Excel date serial number to JavaScript Date
+ * Excel dates are stored as days since 1900-01-01 (with a leap year bug)
+ */
+function excelSerialToDate(serial: number): Date {
+  // Excel incorrectly treats 1900 as a leap year, so dates after Feb 28, 1900 are off by 1
+  // Excel serial 1 = 1900-01-01, serial 2 = 1900-01-02, etc.
+  const excelEpoch = new Date(1899, 11, 30); // December 30, 1899
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return new Date(excelEpoch.getTime() + serial * msPerDay);
+}
+
+/**
+ * Sanitize numeric values from Excel - convert invalid values to null
+ * Handles: "?", "NA", "#N/A", empty strings, undefined
+ */
+function sanitizeNumeric(value: any): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed === '?' || trimmed === 'NA' || trimmed.startsWith('#')) return null;
+    const num = parseFloat(trimmed);
+    return isNaN(num) ? null : num;
+  }
+  if (typeof value === 'number') {
+    return isNaN(value) ? null : value;
+  }
+  return null;
+}
+
 export interface ProcessedData {
   companies: InsertCompany[];
   timeSeries: InsertTimeSeries[];
@@ -84,8 +114,8 @@ function buildCompanyMetadata(
   const greenRevMap = new Map<string, number>();
   for (const row of greenRev) {
     const isin = row['ISSUER_ISIN'];
-    const score = row['SDG_07_NET_ALIGNMENT_SCORE'];
-    if (isin && score !== undefined && score !== null) {
+    const score = sanitizeNumeric(row['SDG_07_NET_ALIGNMENT_SCORE']);
+    if (isin && score !== null) {
       greenRevMap.set(isin, score);
     }
   }
@@ -93,8 +123,8 @@ function buildCompanyMetadata(
   const emissionTargetMap = new Map<string, number>();
   for (const row of emissionTargets) {
     const isin = row['ISSUER_ISIN'];
-    const target = row['TARGET_SUMMARY_CUM_CHANGE_2050'];
-    if (isin && target !== undefined && target !== null) {
+    const target = sanitizeNumeric(row['TARGET_SUMMARY_CUM_CHANGE_2050']);
+    if (isin && target !== null) {
       emissionTargetMap.set(isin, target);
     }
   }
@@ -153,8 +183,9 @@ function buildEmissionsMap(
         companyMap.set(fyKey, { s1: null, s2: null, s3: null });
       }
 
-      if (value !== undefined && value !== null) {
-        companyMap.get(fyKey)!.s1 = value;
+      const sanitized = sanitizeNumeric(value);
+      if (sanitized !== null) {
+        companyMap.get(fyKey)!.s1 = sanitized;
       }
     }
   }
@@ -179,8 +210,9 @@ function buildEmissionsMap(
         companyMap.set(fyKey, { s1: null, s2: null, s3: null });
       }
 
-      if (value !== undefined && value !== null) {
-        companyMap.get(fyKey)!.s2 = value;
+      const sanitized = sanitizeNumeric(value);
+      if (sanitized !== null) {
+        companyMap.get(fyKey)!.s2 = sanitized;
       }
     }
   }
@@ -205,8 +237,9 @@ function buildEmissionsMap(
         companyMap.set(fyKey, { s1: null, s2: null, s3: null });
       }
 
-      if (value !== undefined && value !== null) {
-        companyMap.get(fyKey)!.s3 = value;
+      const sanitized = sanitizeNumeric(value);
+      if (sanitized !== null) {
+        companyMap.get(fyKey)!.s3 = sanitized;
       }
     }
   }
@@ -264,22 +297,82 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
   // Get column names from RI sheet (excluding 'Name' column)
   const riColumns = Object.keys(RI[0] || {}).filter(col => col !== 'Name');
 
+  // Pre-index MV and PE data by date timestamp for fast lookup
+  console.log('Pre-indexing MV data by date...');
+  const mvByDate = new Map<number, any>();
+  for (const row of MV) {
+    const dateValue = row['Name'];
+    let date: Date;
+    if (typeof dateValue === 'number') {
+      date = excelSerialToDate(dateValue);
+    } else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else {
+      continue;
+    }
+    if (!isNaN(date.getTime())) {
+      mvByDate.set(date.getTime(), row);
+    }
+  }
+
+  console.log('Pre-indexing PE data by date...');
+  const peByDate = new Map<number, any>();
+  for (const row of PE) {
+    const dateValue = row['Name'];
+    let date: Date;
+    if (typeof dateValue === 'number') {
+      date = excelSerialToDate(dateValue);
+    } else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else {
+      continue;
+    }
+    if (!isNaN(date.getTime())) {
+      peByDate.set(date.getTime(), row);
+    }
+  }
+
+  // Pre-build ISIN-to-PE-column map for fast lookup
+  console.log('Building ISIN-to-PE-column map...');
+  const isinToPeCol = new Map<string, string>();
+  if (PE.length > 0) {
+    const peColumns = Object.keys(PE[0]).filter(col => col !== 'Name');
+    for (const col of peColumns) {
+      // PE column format: "ISIN(P)~U$/ISIN(F2MN)~U$"
+      const match = col.match(/^([A-Z]{2}[A-Z0-9]{9}[0-9])\(P\)/);
+      if (match) {
+        isinToPeCol.set(match[1], col);
+      }
+    }
+  }
+  console.log(`Mapped ${isinToPeCol.size} ISINs to PE columns`);
+
+  console.log(`Processing ${RI.length} time periods...`);
+  let processedRows = 0;
   for (const row of RI) {
-    const date = new Date(row['Name']);
+    processedRows++;
+    if (processedRows % 50 === 0) {
+      console.log(`  Processed ${processedRows}/${RI.length} time periods (${timeSeries.length} records)`);
+    }
+    const dateValue = row['Name'];
+    let date: Date;
+    
+    // Handle Excel serial numbers
+    if (typeof dateValue === 'number') {
+      date = excelSerialToDate(dateValue);
+    } else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else {
+      continue;
+    }
+    
     if (isNaN(date.getTime())) continue;
 
     dates.add(date);
 
-    // Find corresponding rows in MV and PE
-    const mvRow = MV.find((r: any) => {
-      const mvDate = new Date(r['Name']);
-      return mvDate.getTime() === date.getTime();
-    });
-
-    const peRow = PE.find((r: any) => {
-      const peDate = new Date(r['Name']);
-      return peDate.getTime() === date.getTime();
-    });
+    // Fast lookup of corresponding rows in MV and PE
+    const mvRow = mvByDate.get(date.getTime());
+    const peRow = peByDate.get(date.getTime());
 
     // Process each company column
     for (const colName of riColumns) {
@@ -291,6 +384,12 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
       const companyId = isinToCompanyId.get(isin);
       if (!companyId) continue;
 
+      // Build MV column name: replace "TOT RETURN IND" with "MARKET VAL BY CO."
+      const mvColName = colName.replace('TOT RETURN IND', 'MARKET VAL BY CO.');
+      
+      // For PE, use pre-built ISIN-to-PE-column map
+      const peColName = isinToPeCol.get(isin);
+
       // Get emissions for this date (use closest fiscal year)
       const fy = findClosestFY(date);
       const emissions = emissionsMap.get(isin)?.get(fy);
@@ -298,12 +397,12 @@ export function processClimateData(rawData: RawSheetData): ProcessedData {
       const tsData: InsertTimeSeries = {
         companyId,
         date,
-        totalReturnIndex: row[colName] ?? null,
-        marketCap: mvRow?.[colName] ?? null,
-        priceEarnings: peRow?.[colName] ?? null,
-        scope1Emissions: emissions?.s1 ?? null,
-        scope2Emissions: emissions?.s2 ?? null,
-        scope3Emissions: emissions?.s3 ?? null,
+        totalReturnIndex: sanitizeNumeric(row[colName]),
+        marketCap: sanitizeNumeric(mvRow?.[mvColName]),
+        priceEarnings: peColName ? sanitizeNumeric(peRow?.[peColName]) : null,
+        scope1Emissions: sanitizeNumeric(emissions?.s1),
+        scope2Emissions: sanitizeNumeric(emissions?.s2),
+        scope3Emissions: sanitizeNumeric(emissions?.s3),
       };
 
       timeSeries.push(tsData);

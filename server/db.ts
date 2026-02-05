@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, companies, timeSeries, dataUploads, analysisResults, InsertCompany, InsertTimeSeries, InsertDataUpload, InsertAnalysisResult } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -160,6 +160,26 @@ export async function insertTimeSeries(data: InsertTimeSeries) {
   });
 }
 
+export async function insertTimeSeriesBatch(data: InsertTimeSeries[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const BATCH_SIZE = 1000;
+  for (let i = 0; i < data.length; i += BATCH_SIZE) {
+    const batch = data.slice(i, i + BATCH_SIZE);
+    await db.insert(timeSeries).values(batch).onDuplicateKeyUpdate({
+      set: {
+        totalReturnIndex: sql`VALUES(${timeSeries.totalReturnIndex})`,
+        marketCap: sql`VALUES(${timeSeries.marketCap})`,
+        priceEarnings: sql`VALUES(${timeSeries.priceEarnings})`,
+        scope1Emissions: sql`VALUES(${timeSeries.scope1Emissions})`,
+        scope2Emissions: sql`VALUES(${timeSeries.scope2Emissions})`,
+        scope3Emissions: sql`VALUES(${timeSeries.scope3Emissions})`,
+      },
+    });
+  }
+}
+
 export async function getTimeSeriesByCompany(companyId: number, startDate?: Date, endDate?: Date) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -231,7 +251,7 @@ export async function getDataUploadsByUser(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  return await db.select().from(dataUploads).where(eq(dataUploads.userId, userId));
+  return await db.select().from(dataUploads).where(eq(dataUploads.userId, userId)).orderBy(desc(dataUploads.id));
 }
 
 export async function getDataUploadById(uploadId: number) {

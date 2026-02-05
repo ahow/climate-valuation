@@ -46,19 +46,19 @@ export default function Upload() {
     setUploading(true);
 
     try {
-      // Read file as base64
+      // Read file as base64 using browser-native API
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const arrayBuffer = e.target?.result as ArrayBuffer;
-        const buffer = Buffer.from(arrayBuffer);
-        const base64 = buffer.toString('base64');
+        const dataUrl = e.target?.result as string;
+        // Extract base64 part from data URL (format: "data:application/vnd.ms-excel;base64,XXXXX")
+        const base64 = dataUrl.split(',')[1];
 
         await uploadMutation.mutateAsync({
           filename: file.name,
           fileBuffer: base64,
         });
       };
-      reader.readAsArrayBuffer(file);
+      reader.readAsDataURL(file);
     } catch (error) {
       console.error('Upload error:', error);
       setUploading(false);

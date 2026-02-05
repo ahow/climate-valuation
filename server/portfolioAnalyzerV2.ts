@@ -381,7 +381,13 @@ export function analyzePortfolio(
   const climateCompanies = classification[investmentType === 'low_carbon' ? 'lowCarbon' : investmentType];
   const baselineCompanies = classification.baseline;
 
+  console.log(`[analyzePortfolio] ${investmentType} on ${date.toISOString().split('T')[0]} (sector=${sector}, geo=${geography}):`);
+  console.log(`  - Climate companies: ${climateCompanies.length}`);
+  console.log(`  - Baseline companies: ${baselineCompanies.length}`);
+  console.log(`  - Total companies with data: ${companiesWithData.length}`);
+
   if (climateCompanies.length === 0 || baselineCompanies.length === 0) {
+    console.log(`  - SKIPPED: Not enough companies`);
     return null;
   }
 
