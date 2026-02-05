@@ -25,6 +25,8 @@ export default function Analysis() {
     thresholds: {
       tertileApproach: true,
     },
+    winsorize: true,
+    winsorizePercentile: 5,
   });
   
   const [filters, setFilters] = useState({
@@ -264,6 +266,41 @@ export default function Analysis() {
                   </p>
                 </div>
 
+                {/* Outlier Treatment */}
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Outlier Treatment</Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="winsorize"
+                      checked={parameters.winsorize}
+                      onCheckedChange={(checked) => setParameters(prev => ({ ...prev, winsorize: checked }))}
+                    />
+                    <Label htmlFor="winsorize" className="font-normal cursor-pointer">
+                      Apply winsorization
+                    </Label>
+                  </div>
+                  {parameters.winsorize && (
+                    <Select 
+                      value={parameters.winsorizePercentile.toString()} 
+                      onValueChange={(value) => setParameters(prev => ({ ...prev, winsorizePercentile: parseInt(value) }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1st-99th percentile (aggressive)</SelectItem>
+                        <SelectItem value="5">5th-95th percentile (moderate)</SelectItem>
+                        <SelectItem value="10">10th-90th percentile (conservative)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <p className="text-xs text-slate-600">
+                    {parameters.winsorize
+                      ? `Caps extreme P/E and carbon intensity values at ${parameters.winsorizePercentile}th-${100-parameters.winsorizePercentile}th percentiles`
+                      : 'No outlier treatment - uses raw data (may be affected by extreme values)'}
+                  </p>
+                </div>
+
                 {/* Portfolio Classification Approach */}
                 <div className="space-y-3">
                   <Label className="text-base font-semibold">Portfolio Classification</Label>
@@ -361,8 +398,9 @@ export default function Analysis() {
                 <div className="mt-4 p-4 bg-slate-50 rounded-lg text-sm text-slate-700 space-y-2">
                   <p className="font-semibold">Calculation Methodology:</p>
                   <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li><strong>Outlier Treatment:</strong> {parameters.winsorize ? `P/E and carbon intensity winsorized at ${parameters.winsorizePercentile}th-${100-parameters.winsorizePercentile}th percentiles` : 'No winsorization applied'}</li>
                     <li><strong>Carbon Risk Discount:</strong> (P/E_climate / P/E_baseline) - 1</li>
-                    <li><strong>Implied Carbon Price:</strong> Converts valuation premium to $/tCO2</li>
+                    <li><strong>Implied Carbon Price:</strong> (Discount × Baseline P/E) / Carbon Intensity Difference</li>
                     <li><strong>Decarbonization Rate:</strong> Maps carbon price to annual reduction:
                       <ul className="list-disc list-inside ml-6 mt-1 text-xs">
                         <li>$0-50/tCO2 → 0-2% annual reduction</li>

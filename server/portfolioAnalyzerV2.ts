@@ -28,10 +28,34 @@ export interface ClassificationThresholds {
 }
 
 export interface AnalysisParameters {
-  includeScope3: boolean; // Use Scope 1+2+3 vs Scope 1+2
+  includeScope3: boolean;
   methodology: 'relative' | 'dcf';
-  sectorGranularity: 'sector' | 'industry'; // Which classification level to use
+  sectorGranularity: 'sector' | 'industry';
   thresholds: ClassificationThresholds;
+  winsorize: boolean;
+  winsorizePercentile: number;
+}
+
+/**
+ * Winsorize an array of numbers at specified percentiles
+ */
+export function winsorize(values: number[], lowerPercentile: number, upperPercentile: number): number[] {
+  if (values.length === 0) return [];
+  if (values.length === 1) return values;
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  
+  const lowerIndex = Math.max(0, Math.floor((sorted.length - 1) * lowerPercentile / 100));
+  const upperIndex = Math.min(sorted.length - 1, Math.ceil((sorted.length - 1) * upperPercentile / 100));
+  
+  const lowerBound = sorted[lowerIndex];
+  const upperBound = sorted[upperIndex];
+  
+  return values.map(v => {
+    if (v < lowerBound) return lowerBound;
+    if (v > upperBound) return upperBound;
+    return v;
+  });
 }
 
 /**
@@ -223,7 +247,9 @@ export function calculatePortfolioMetrics(
   companyIds: number[],
   companiesWithData: CompanyWithTimeSeries[],
   date: Date,
-  includeScope3: boolean = false
+  includeScope3: boolean = false,
+  applyWinsorization: boolean = false,
+  winsorizePercentile: number = 5
 ): {
   avgCarbonIntensity: number;
   avgPeRatio: number;
@@ -252,8 +278,16 @@ export function calculatePortfolioMetrics(
 
   if (validData.length === 0) return null;
 
-  const avgCarbonIntensity = validData.reduce((sum, d) => sum + d.intensity, 0) / validData.length;
-  const avgPeRatio = validData.reduce((sum, d) => sum + d.pe, 0) / validData.length;
+  let intensities = validData.map(d => d.intensity);
+  let peRatios = validData.map(d => d.pe);
+
+  if (applyWinsorization && validData.length > 10) {
+    intensities = winsorize(intensities, winsorizePercentile, 100 - winsorizePercentile);
+    peRatios = winsorize(peRatios, winsorizePercentile, 100 - winsorizePercentile);
+  }
+
+  const avgCarbonIntensity = intensities.reduce((sum, v) => sum + v, 0) / intensities.length;
+  const avgPeRatio = peRatios.reduce((sum, v) => sum + v, 0) / peRatios.length;
 
   return {
     avgCarbonIntensity,
@@ -396,13 +430,17 @@ export function analyzePortfolio(
     climateCompanies,
     companiesWithData,
     date,
-    parameters.includeScope3
+    parameters.includeScope3,
+    parameters.winsorize,
+    parameters.winsorizePercentile
   );
   const baselineMetrics = calculatePortfolioMetrics(
     baselineCompanies,
     companiesWithData,
     date,
-    parameters.includeScope3
+    parameters.includeScope3,
+    parameters.winsorize,
+    parameters.winsorizePercentile
   );
 
   if (!climateMetrics || !baselineMetrics) {

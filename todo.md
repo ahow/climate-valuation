@@ -122,3 +122,12 @@
 - [x] Allow negative values on Y-axis (negative decarbonization rates are meaningful)
 - [x] Add tooltip or documentation explaining decarbonization rate calculation methodology
 - [x] Test chart with improved formatting
+
+## Outlier Treatment and Robustness
+- [x] Implement winsorization for P/E ratios (remove extreme values)
+- [x] Implement winsorization for carbon intensity (remove extreme values)
+- [x] Add configurable winsorization percentiles (e.g., 1st-99th, 5th-95th)
+- [x] Add UI controls for outlier treatment parameters
+- [x] Document impact of winsorization on results
+- [x] Test analysis with and without winsorization
+- [x] All 8 unit tests passing for winsorization function
