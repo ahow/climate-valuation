@@ -246,6 +246,128 @@ export const appRouter = router({
     getDateRange: publicProcedure.query(async () => {
       return await db.getTimeSeriesDateRange();
     }),
+
+    /**
+     * Get P/E ratio comparison for top vs bottom tercile carbon intensity companies
+     */
+    getPETercileComparison: publicProcedure
+      .input(z.object({
+        uploadId: z.number(),
+        method: z.enum(['absolute', 'sector_relative']).default('sector_relative'),
+        includeScope3: z.boolean().default(false),
+        winsorize: z.boolean().default(true),
+        winsorizePercentile: z.number().default(5),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { uploadId, method, includeScope3, winsorize, winsorizePercentile, startDate, endDate } = input;
+
+        // Get all companies and their time series
+        const companies = await db.getAllCompanies();
+        const companiesWithData: CompanyWithTimeSeries[] = [];
+
+        const start = startDate ? new Date(startDate) : undefined;
+        const end = endDate ? new Date(endDate) : undefined;
+
+        for (const company of companies) {
+          const timeSeries = await db.getTimeSeriesByCompany(company.id!, start, end);
+          companiesWithData.push({ company, timeSeries });
+        }
+
+        // Get unique dates
+        const dateSet = new Set<number>();
+        for (const { timeSeries } of companiesWithData) {
+          for (const ts of timeSeries) {
+            dateSet.add(ts.date.getTime());
+          }
+        }
+        const dates = Array.from(dateSet).map(t => new Date(t)).sort((a, b) => a.getTime() - b.getTime());
+
+        // Import helper functions
+        const { calculateCarbonIntensity, calculatePortfolioMetrics, winsorize: winsorizeValues } = await import('./portfolioAnalyzerV2');
+
+        const results = [];
+
+        for (const date of dates) {
+          // Calculate carbon intensity for all companies at this date
+          const companiesWithIntensity = companiesWithData
+            .map(({ company, timeSeries }) => {
+              const ts = timeSeries.find(t => t.date.getTime() === date.getTime());
+              if (!ts || !ts.priceEarnings) return null;
+
+              const scope1 = ts.scope1Emissions || 0;
+              const scope2 = ts.scope2Emissions || 0;
+              const scope3 = includeScope3 ? (ts.scope3Emissions || 0) : 0;
+              const totalEmissions = scope1 + scope2 + scope3;
+              const marketCap = ts.marketCap;
+
+              if (!marketCap || marketCap === 0 || totalEmissions === 0) return null;
+              const intensity = totalEmissions / (marketCap / 1_000_000); // tCO2 per million dollars
+              if (intensity === null || intensity === 0) return null;
+
+              return { company, timeSeries, intensity, pe: ts.priceEarnings };
+            })
+            .filter(Boolean) as Array<{ company: any; timeSeries: any[]; intensity: number; pe: number }>;
+
+          if (companiesWithIntensity.length < 10) continue;
+
+          let topTercile: typeof companiesWithIntensity;
+          let bottomTercile: typeof companiesWithIntensity;
+
+          if (method === 'absolute') {
+            // Absolute terciles across all companies
+            const sorted = [...companiesWithIntensity].sort((a, b) => a.intensity - b.intensity);
+            const tercileSize = Math.floor(sorted.length / 3);
+            bottomTercile = sorted.slice(0, tercileSize); // Lowest intensity
+            topTercile = sorted.slice(-tercileSize); // Highest intensity
+          } else {
+            // Sector-relative terciles
+            const bySector = new Map<string, typeof companiesWithIntensity>();
+            for (const item of companiesWithIntensity) {
+              const sector = item.company.sector || 'Unknown';
+              if (!bySector.has(sector)) bySector.set(sector, []);
+              bySector.get(sector)!.push(item);
+            }
+
+            topTercile = [];
+            bottomTercile = [];
+
+            for (const [sector, items] of Array.from(bySector.entries())) {
+              if (items.length < 3) continue;
+              const sorted = [...items].sort((a, b) => a.intensity - b.intensity);
+              const tercileSize = Math.floor(sorted.length / 3);
+              bottomTercile.push(...sorted.slice(0, tercileSize));
+              topTercile.push(...sorted.slice(-tercileSize));
+            }
+          }
+
+          if (topTercile.length === 0 || bottomTercile.length === 0) continue;
+
+          // Calculate average P/E with optional winsorization
+          let topPEs = topTercile.map(t => t.pe);
+          let bottomPEs = bottomTercile.map(t => t.pe);
+
+          if (winsorize && topPEs.length > 10 && bottomPEs.length > 10) {
+            topPEs = winsorizeValues(topPEs, winsorizePercentile, 100 - winsorizePercentile);
+            bottomPEs = winsorizeValues(bottomPEs, winsorizePercentile, 100 - winsorizePercentile);
+          }
+
+          const avgTopPE = topPEs.reduce((sum, pe) => sum + pe, 0) / topPEs.length;
+          const avgBottomPE = bottomPEs.reduce((sum, pe) => sum + pe, 0) / bottomPEs.length;
+
+          results.push({
+            date: date.toISOString(),
+            topTercilePE: avgTopPE,
+            bottomTercilePE: avgBottomPE,
+            topTercileCount: topTercile.length,
+            bottomTercileCount: bottomTercile.length,
+            valuationPremium: (avgBottomPE / avgTopPE - 1) * 100, // % premium for low-carbon
+          });
+        }
+
+        return results;
+      }),
   }),
 
   export: router({

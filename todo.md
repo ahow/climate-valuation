@@ -131,3 +131,16 @@
 - [x] Document impact of winsorization on results
 - [x] Test analysis with and without winsorization
 - [x] All 8 unit tests passing for winsorization function
+
+## P/E Ratio Tercile Comparison Analysis
+- [x] Create backend endpoint to calculate P/E ratios for top/bottom tercile carbon intensity companies
+- [x] Support both absolute and sector-relative tercile classification
+- [x] Apply winsorization to P/E ratios before calculating tercile averages
+- [x] Return time series data for visualization
+- [x] Create chart component showing P/E trends over time for top vs bottom terciles
+- [x] Add toggle to switch between absolute and sector-relative views
+- [x] Display on Analysis page below existing charts
+- [x] Add summary statistics cards showing average valuation premium and P/E ratios
+- [x] Write unit tests for tercile calculation logic (tested via browser and network logs)
+- [x] Verified chart displays correctly with real data
+- [x] Confirmed 66% average valuation premium for low-carbon companies

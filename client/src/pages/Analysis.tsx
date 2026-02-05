@@ -35,6 +35,8 @@ export default function Analysis() {
     sector: 'all',
   });
 
+  const [tercileMethod, setTercileMethod] = useState<'absolute' | 'sector_relative'>('sector_relative');
+
   const uploadIdNum = parseInt(uploadId || '0');
 
   const { data: uploadStatus, isLoading: loadingStatus } = trpc.data.getUploadStatus.useQuery(
@@ -45,6 +47,17 @@ export default function Analysis() {
   const { data: dimensions } = trpc.analysis.getDimensions.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+
+  const tercileQuery = trpc.analysis.getPETercileComparison.useQuery(
+    {
+      uploadId: uploadIdNum,
+      method: tercileMethod,
+      includeScope3: parameters.includeScope3,
+      winsorize: parameters.winsorize,
+      winsorizePercentile: parameters.winsorizePercentile,
+    },
+    { enabled: !!uploadId && isAuthenticated && uploadStatus?.status === 'completed' }
+  );
 
   const analyzeMutation = trpc.analysis.analyze.useMutation({
     onSuccess: () => {
@@ -447,6 +460,94 @@ export default function Analysis() {
                     <p className="text-slate-600 mb-6">
                       Configure parameters and click "Run Analysis" to calculate implied decarbonization rates
                     </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* P/E Tercile Comparison */}
+          {tercileQuery.data && tercileQuery.data.length > 0 && (
+            <Card className="mt-8">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      P/E Ratio: Top vs Bottom Carbon Intensity Terciles
+                    </CardTitle>
+                    <CardDescription>
+                      Average P/E ratios for highest vs lowest carbon intensity companies (after winsorization)
+                    </CardDescription>
+                  </div>
+                  <Select value={tercileMethod} onValueChange={(v: 'absolute' | 'sector_relative') => setTercileMethod(v)}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sector_relative">Sector-Relative</SelectItem>
+                      <SelectItem value="absolute">Absolute</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="mt-4 p-4 bg-slate-50 rounded-lg text-sm text-slate-700 space-y-2">
+                  <p className="font-semibold">Interpretation:</p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li><strong>Bottom Tercile (Low Carbon):</strong> Companies with lowest carbon intensity (cleanest)</li>
+                    <li><strong>Top Tercile (High Carbon):</strong> Companies with highest carbon intensity (most carbon-intensive)</li>
+                    <li><strong>Valuation Premium:</strong> Positive = low-carbon companies valued higher; Negative = high-carbon companies valued higher</li>
+                    <li><strong>{tercileMethod === 'sector_relative' ? 'Sector-Relative' : 'Absolute'}:</strong> {tercileMethod === 'sector_relative' ? 'Compares companies within their sector (e.g., cleanest energy vs dirtiest energy)' : 'Compares all companies across all sectors'}</li>
+                  </ul>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={tercileQuery.data.map(d => ({
+                    date: new Date(d.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
+                    'Bottom Tercile (Low Carbon)': d.bottomTercilePE,
+                    'Top Tercile (High Carbon)': d.topTercilePE,
+                  }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="#64748b"
+                      style={{ fontSize: '12px' }}
+                    />
+                    <YAxis 
+                      stroke="#64748b"
+                      style={{ fontSize: '12px' }}
+                      label={{ value: 'P/E Ratio', angle: -90, position: 'insideLeft', style: { fill: '#64748b' } }}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [value.toFixed(2), '']}
+                      labelStyle={{ color: '#1e293b' }}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="Bottom Tercile (Low Carbon)" stroke="#10b981" strokeWidth={2} />
+                    <Line type="monotone" dataKey="Top Tercile (High Carbon)" stroke="#ef4444" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="mt-6 grid grid-cols-3 gap-4">
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Average Valuation Premium</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {(tercileQuery.data.reduce((sum, d) => sum + d.valuationPremium, 0) / tercileQuery.data.length).toFixed(2)}%
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Low-carbon vs high-carbon</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Avg Bottom Tercile P/E</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {(tercileQuery.data.reduce((sum, d) => sum + d.bottomTercilePE, 0) / tercileQuery.data.length).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Lowest carbon intensity</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-1">Avg Top Tercile P/E</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {(tercileQuery.data.reduce((sum, d) => sum + d.topTercilePE, 0) / tercileQuery.data.length).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Highest carbon intensity</p>
                   </div>
                 </div>
               </CardContent>
