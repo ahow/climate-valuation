@@ -186,3 +186,22 @@
 - [ ] Test performance improvement (should load instantly from cache after re-upload)
 - [x] UI already has carbon price chart component (added in previous checkpoint)
 - [ ] Verify carbon price chart displays correctly with cached data (after re-upload)
+
+## Fix tRPC Service Unavailable Error
+- [x] Check server logs for startup errors or crashes
+- [x] Verify all imports in routers.ts are correct (especially computeTercilesForUpload)
+- [x] Check for syntax errors in routers.ts
+- [x] Restart server and verify tRPC endpoints are accessible
+- [x] Add better error logging to catch silent failures
+- [x] Mark stuck uploads (60001, 60002) as failed
+- [ ] Test upload endpoint with sample file and monitor logs
+
+## Implement S3 Direct Upload to Fix Upload Failures
+- [ ] Add AWS SDK to generate pre-signed S3 URLs
+- [ ] Create tRPC endpoint to generate pre-signed upload URL
+- [ ] Create tRPC endpoint to process file after S3 upload completes
+- [ ] Update frontend to upload directly to S3 using pre-signed URL
+- [ ] Add progress indicator for S3 upload
+- [ ] Test with 19.43 MB file to confirm it bypasses nginx limits
+- [ ] Verify tercile pre-computation works after S3 upload
+- [ ] Verify carbon price chart displays correctly

@@ -25,35 +25,64 @@ export const appRouter = router({
 
   data: router({
     /**
-     * Upload and process Excel file
+     * Get pre-signed S3 upload URL for direct client upload
      */
-    upload: publicProcedure
+    getUploadUrl: publicProcedure
       .input(z.object({
         filename: z.string(),
-        fileBuffer: z.string(), // Base64 encoded
       }))
       .mutation(async ({ input }) => {
         const userId = 1; // Default user ID for public access
-
-        // Decode base64 buffer
-        const buffer = Buffer.from(input.fileBuffer, 'base64');
-
-        // Upload to S3
         const fileKey = `uploads/${userId}/${Date.now()}-${input.filename}`;
-        const { url: fileUrl } = await storagePut(fileKey, buffer, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        
+        // Import storageGetUploadUrl
+        const { storageGetUploadUrl } = await import('./storage.js');
+        const { uploadUrl, apiKey } = await storageGetUploadUrl(fileKey);
+        
+        return {
+          uploadUrl,
+          apiKey,
+          fileKey,
+          filename: input.filename,
+        };
+      }),
+
+    /**
+     * Process uploaded file from S3
+     */
+    processUpload: publicProcedure
+      .input(z.object({
+        filename: z.string(),
+        fileKey: z.string(),
+        fileUrl: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const userId = 1; // Default user ID for public access
 
         // Create upload record
         const uploadId = await db.createDataUpload({
           userId,
           filename: input.filename,
-          fileKey,
-          fileUrl,
+          fileKey: input.fileKey,
+          fileUrl: input.fileUrl,
           status: 'processing',
         });
+
+        console.log(`[Upload ${uploadId}] File uploaded to S3: ${input.fileUrl}`);
 
         // Process file asynchronously
         (async () => {
           try {
+            console.log(`[Upload ${uploadId}] Downloading file from S3...`);
+            // Download file from S3
+            const response = await fetch(input.fileUrl);
+            if (!response.ok) {
+              throw new Error(`Failed to download file from S3: ${response.statusText}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            console.log(`[Upload ${uploadId}] Downloaded ${buffer.length} bytes`);
+
             console.log(`[Upload ${uploadId}] Parsing Excel file...`);
             // Parse Excel file
             const rawData = parseExcelFile(buffer);
@@ -102,7 +131,8 @@ export const appRouter = router({
               timePeriodsCount: processedData.stats.totalTimePeriods,
             });
           } catch (error) {
-            console.error('Error processing upload:', error);
+            console.error(`[Upload ${uploadId}] Error processing upload:`, error);
+            console.error(`[Upload ${uploadId}] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
             await db.updateDataUploadStatus(uploadId, 'failed', {
               errorMessage: error instanceof Error ? error.message : 'Unknown error',
             });

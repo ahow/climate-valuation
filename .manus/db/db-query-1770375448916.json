@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE data_uploads SET status = 'failed', error_message = 'Manually marked as failed - stuck in processing' WHERE id IN (60001, 60002);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user ovDZf4AdgM1wjio.97e32be5c07f --database DTAXpJhcj6LWb66xpd73se --execute UPDATE data_uploads SET status = 'failed', error_message = 'Manually marked as failed - stuck in processing' WHERE id IN (60001, 60002);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 360
+}

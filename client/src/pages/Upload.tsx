@@ -15,13 +15,14 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadMutation = trpc.data.upload.useMutation({
+  const getUploadUrlMutation = trpc.data.getUploadUrl.useMutation();
+  const processUploadMutation = trpc.data.processUpload.useMutation({
     onSuccess: (data) => {
       toast.success("File uploaded successfully! Processing data...");
       setLocation(`/analysis/${data.uploadId}`);
     },
     onError: (error) => {
-      toast.error(`Upload failed: ${error.message}`);
+      toast.error(`Processing failed: ${error.message}`);
       setUploading(false);
     },
   });
@@ -46,21 +47,43 @@ export default function Upload() {
     setUploading(true);
 
     try {
-      // Read file as base64 using browser-native API
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const dataUrl = e.target?.result as string;
-        // Extract base64 part from data URL (format: "data:application/vnd.ms-excel;base64,XXXXX")
-        const base64 = dataUrl.split(',')[1];
+      // Step 1: Get pre-signed S3 upload URL
+      toast.info("Preparing upload...");
+      const { uploadUrl, apiKey, fileKey } = await getUploadUrlMutation.mutateAsync({
+        filename: file.name,
+      });
 
-        await uploadMutation.mutateAsync({
-          filename: file.name,
-          fileBuffer: base64,
-        });
-      };
-      reader.readAsDataURL(file);
+      // Step 2: Upload file directly to S3
+      toast.info("Uploading file to cloud storage...");
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`S3 upload failed: ${errorText}`);
+      }
+
+      const uploadResult = await uploadResponse.json();
+      const fileUrl = uploadResult.url;
+
+      // Step 3: Notify backend to process the uploaded file
+      toast.info("Processing data...");
+      await processUploadMutation.mutateAsync({
+        filename: file.name,
+        fileKey,
+        fileUrl,
+      });
     } catch (error) {
       console.error('Upload error:', error);
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setUploading(false);
     }
   };

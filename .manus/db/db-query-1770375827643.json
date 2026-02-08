@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, filename, status, error_message, createdAt FROM data_uploads ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user ovDZf4AdgM1wjio.97e32be5c07f --database DTAXpJhcj6LWb66xpd73se --execute SELECT id, filename, status, error_message, createdAt FROM data_uploads ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "60004",
+      "filename": "CarbonData2301a.xlsx",
+      "status": "processing",
+      "error_message": "NULL",
+      "createdAt": "2026-02-06 11:00:53"
+    },
+    {
+      "id": "60003",
+      "filename": "CarbonData2301a.xlsx",
+      "status": "processing",
+      "error_message": "NULL",
+      "createdAt": "2026-02-06 10:59:26"
+    },
+    {
+      "id": "60002",
+      "filename": "CarbonData2301a.xlsx",
+      "status": "failed",
+      "error_message": "Manually marked as failed - stuck in processing",
+      "createdAt": "2026-02-06 10:53:26"
+    },
+    {
+      "id": "60001",
+      "filename": "CarbonData2301a.xlsx",
+      "status": "failed",
+      "error_message": "Manually marked as failed - stuck in processing",
+      "createdAt": "2026-02-06 10:52:29"
+    },
+    {
+      "id": "30002",
+      "filename": "CarbonData2301a.xlsx",
+      "status": "completed",
+      "error_message": "NULL",
+      "createdAt": "2026-02-04 23:21:24"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfilename\tstatus\terror_message\tcreatedAt\n60004\tCarbonData2301a.xlsx\tprocessing\tNULL\t2026-02-06 11:00:53\n60003\tCarbonData2301a.xlsx\tprocessing\tNULL\t2026-02-06 10:59:26\n60002\tCarbonData2301a.xlsx\tfailed\tManually marked as failed - stuck in processing\t2026-02-06 10:53:26\n60001\tCarbonData2301a.xlsx\tfailed\tManually marked as failed - stuck in processing\t2026-02-06 10:52:29\n30002\tCarbonData2301a.xlsx\tcompleted\tNULL\t2026-02-04 23:21:24\n",
+  "stderr": "",
+  "execution_time_ms": 353
+}

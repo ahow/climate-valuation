@@ -100,3 +100,21 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
     url: await buildDownloadUrl(baseUrl, key, apiKey),
   };
 }
+
+/**
+ * Generate a pre-signed upload URL for direct client-side uploads to S3
+ * This allows the frontend to upload large files directly to S3, bypassing nginx limits
+ */
+export async function storageGetUploadUrl(
+  relKey: string
+): Promise<{ key: string; uploadUrl: string; apiKey: string }> {
+  const { baseUrl, apiKey } = getStorageConfig();
+  const key = normalizeKey(relKey);
+  const uploadUrl = buildUploadUrl(baseUrl, key).toString();
+  
+  return {
+    key,
+    uploadUrl,
+    apiKey, // Frontend needs this to authenticate the upload
+  };
+}
